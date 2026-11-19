@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E1114">
+<title>Luz del acuario</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icono-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root { --bg:#0E1114; --sup:#171B1F; --sup2:#1F242A; --linea:#2B3138; --texto:#EEF1F3; --sec:#A3ADB6; --acento:#63D4B6; --acento-t:#7FDCC3; --sol:#F4B860; --error:#FF9A8C;
+          --rojo:#FF7A6B; --verde:#4CD38A; --azul:#6B95FF; --uv:#B79CFF; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--texto); font: 16px/1.4 Inter, system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+  .num { font-variant-numeric: tabular-nums; }
+  main { max-width: 480px; margin: 0 auto; padding: 16px 16px 104px; display: flex; flex-direction: column; gap: 14px; }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  h1 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
+  h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  .sec { color: var(--sec); font-size: 13px; }
+  .tarjeta { background: var(--sup); border: 1px solid var(--linea); border-radius: 16px; padding: 14px; }
+  .pila { display: flex; flex-direction: column; gap: 14px; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:disabled { opacity: .4; cursor: default; }
+  .btn { height: 48px; border-radius: 12px; border: 1px solid var(--linea); background: var(--sup); padding: 0 14px; font-size: 15px; font-weight: 500; }
+  .btn.prim { background: var(--texto); color: var(--bg); border: none; font-weight: 600; }
+  .btn, .chip, .mezcla, .paso { transition: transform .08s, background .15s; }
+  .btn:active, .chip:active, .mezcla:active, .paso:active { transform: scale(.96); }
+  .btn:active { background: var(--sup2); } .btn.prim:active { background: #C9D0D6; }
+  .btn[aria-busy="true"] { opacity: .75; }
+  .fila { display: flex; gap: 8px; }
+  .fila > * { flex: 1; min-width: 0; }
+  #chip { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--linea); background: var(--sup); font-size: 14px; white-space: nowrap; }
+  #chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--sec); }
+  #chip.ok i { background: var(--acento); }
+  #chip.esperando i { background: var(--sol); }
+  #aviso { margin: 0; padding: 12px 14px; border-radius: 12px; font-size: 14px; background: var(--sup2); }
+  #aviso.error { background: #2A1A1A; border: 1px solid #5C2C2A; color: #F0D6D2; }
+  #aviso:empty { display: none; }
+  #vista { margin-bottom: 4px; }
+  details > summary { padding: 2px 0; }
+  details.plegable > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+  details.plegable > summary::-webkit-details-marker { display: none; }
+  details.plegable > summary::after { content: '›'; color: var(--sec); font-size: 20px; transition: rotate .2s; }
+  details.plegable[open] > summary::after { rotate: 90deg; }
+  details.plegable > summary h2 { margin: 0; }
+  .canal { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--linea); }
+  .canal:last-child { border-bottom: none; }
+  .canal label { grid-area: 1 / 1; display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; }
+  .canal .paso[data-d="-1"] { grid-column: 2; }
+  .canal .paso[data-d="1"] { grid-column: 3; }
+  .canal label span:first-child::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c); margin-right: 8px; }
+  .canal input { grid-area: 2 / 1; width: 100%; accent-color: var(--c); height: 28px; margin: 0; }
+  .paso { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--linea); background: var(--sup2); font-size: 18px; grid-row: 1 / span 2; }
+  .chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .chips.envolver { flex-wrap: wrap; overflow: visible; }
+  .chip { height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--linea); background: transparent; color: #C9D0D6; font-size: 13px; white-space: nowrap; }
+  .chip[aria-pressed="true"] { background: var(--texto); color: var(--bg); border-color: var(--texto); font-weight: 600; }
+  .chip.planta[aria-pressed="true"] { background: #16302A; color: var(--texto); border-color: var(--acento); }
+  .mezclas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .mezcla { text-align: left; background: var(--sup); border: 1px solid var(--linea); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .mezcla[aria-pressed="true"] { border: 1.5px solid var(--acento); background: #16302A; }
+  .mezcla b { font-size: 14px; }
+  .barras { display: flex; gap: 2px; align-items: flex-end; height: 14px; }
+  .barras span { flex: 1; border-radius: 2px; min-height: 2px; }
+  .rampas { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
+  .rampas .chip { padding: 0; height: 40px; border-radius: 10px; }
+  .hora { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--sec); min-width: 0; }
+  .hora input { width: 100%; min-width: 0; height: 52px; border-radius: 12px; border: 1px solid var(--linea); background: var(--sup); color: var(--texto); font: inherit; font-size: 19px; font-weight: 700; padding: 0 12px; color-scheme: dark; }
+  .campo { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #C9D0D6; min-width: 0; }
+  .campo input, .campo select { height: 48px; border-radius: 12px; border: 1px solid var(--linea); background: var(--sup); color: var(--texto); font: inherit; font-size: 16px; padding: 0 12px; width: 100%; color-scheme: dark; }
+  .campo input[type=number] { text-align: center; font-weight: 600; }
+  .opcion { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--linea); background: var(--sup); cursor: pointer; }
+  .opcion:has(input:checked) { border-color: var(--acento); }
+  .opcion input { width: 20px; height: 20px; accent-color: var(--acento); margin: 0; }
+  .interruptor { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
+  .interruptor input { width: 22px; height: 22px; accent-color: var(--acento); }
+  .lista > * { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--linea); }
+  .lista > *:last-child { border-bottom: none; }
+  .datos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .datos div { background: var(--sup2); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .datos span { font-size: 11px; color: var(--sec); }
+  .nota-aviso { background: #2A2416; border: 1px solid #5A4A22; border-radius: 14px; padding: 12px 14px; color: #F1E3C0; font-size: 13px; }
+  .nota-aviso p { margin: 0 0 4px; } .nota-aviso p:last-child { margin: 0; }
+  .progreso { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .progreso span { height: 4px; border-radius: 2px; background: var(--linea); }
+  .progreso span.hecho { background: var(--texto); }
+  .solo-lector { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  nav { position: fixed; bottom: 0; left: 0; right: 0; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--bg); border-top: 1px solid var(--linea); padding: 6px 8px calc(10px + env(safe-area-inset-bottom)); }
+  nav button { height: 52px; border: none; background: none; color: var(--sec); font-size: 13px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+  nav button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  nav button[aria-selected="true"] { color: var(--texto); font-weight: 600; }
+  /* Vista frontal del acuario: capas de imágenes PNG posicionadas en % */
+  .vista-frontal { position: relative; width: 100%; overflow: hidden; border-radius: 14px; border: 1px solid var(--linea); transition: filter .4s; isolation: isolate; }
+  .vista-frontal .agua { position: absolute; inset: 0; background: linear-gradient(#16262C, #0D1A1F); }
+  /* El sustrato sube hasta la base del fondo (80 %) y queda detrás del medio y el frente: así nada flota. */
+  .vista-frontal .sustrato { position: absolute; left: 0; right: 0; bottom: 0; height: 21.5%; background: linear-gradient(#2A2018, #3A2C20 35%, #241A12); z-index: 825; }
+  .tanque .vista-frontal .sustrato { top: 0; height: auto; } /* con pendiente: ocupa toda la vista y se recorta con clip-path */ /* capas = base×10: delante del fondo (800), detrás del medio (850) */
+  .vista-frontal img, .vista-frontal .falta-img { position: absolute; object-fit: contain; object-position: bottom; }
+  .vista-frontal .falta-img { box-sizing: border-box; border: 1px dashed color-mix(in srgb, var(--c) 70%, #fff); background: color-mix(in srgb, var(--c) 35%, transparent);
+    border-radius: 40% 40% 6px 6px; color: #EEF1F3; font-size: clamp(8px, 2.2vw, 11px); display: flex; align-items: flex-end; justify-content: center; text-align: center; padding: 3px; overflow: hidden; line-height: 1.1; }
+  .vista-frontal .sombra { position: absolute; pointer-events: none; border-radius: 50%; background: radial-gradient(closest-side, rgba(0,0,0,.55), rgba(0,0,0,0)); }
+  .vista-frontal .luz { position: absolute; inset: 0; mix-blend-mode: soft-light; z-index: 3000; pointer-events: none; }
+  /* Acuario completo: lámpara arriba, aire bajo el vidrio y el agua. */
+  .tanque { position: relative; }
+  .tanque .vista-frontal { border-radius: 0 0 14px 14px; border-top: none; }
+  .tanque .lampara { position: relative; margin: 0 1.5%; z-index: 1; }
+  .tanque .barra { height: clamp(8px, 2.6vw, 16px); background: linear-gradient(#22262A, #0B0C0D); border-radius: 3px; display: flex; align-items: center;
+    justify-content: space-evenly; padding: 0 2%; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+  .tanque .barra i { width: clamp(2px, .7vw, 4px); height: clamp(2px, .7vw, 4px); border-radius: 50%; flex: none; }
+  .tanque .barra b { width: 2%; flex: none; }
+  .tanque .aire { position: relative; border: 1px solid var(--linea); border-bottom: none; border-radius: 6px 6px 0 0; background: linear-gradient(rgba(255,255,255,.015), rgba(170,210,230,.06)); }
+  .tanque .aire::before, .tanque .aire::after { content: ''; position: absolute; top: -1px; bottom: 0; width: 3px; background: #15181B; }
+  .tanque .aire::before { left: 2.5%; } .tanque .aire::after { right: 2.5%; }
+  .vista-frontal .agua { box-shadow: inset 0 2px 0 rgba(200,230,255,.22); } /* superficie del agua */
+  .vista-frontal .haz { position: absolute; inset: 0; z-index: 2999; pointer-events: none; mix-blend-mode: screen;
+    background: repeating-linear-gradient(97deg, transparent 0 4%, color-mix(in srgb, var(--luz) 22%, transparent) 4% 6%, transparent 6% 11%),
+      linear-gradient(color-mix(in srgb, var(--luz) 40%, transparent), transparent 75%);
+    -webkit-mask-image: linear-gradient(#000, transparent 90%); mask-image: linear-gradient(#000, transparent 90%); }
+  .vista-frontal .barra-luz { position: absolute; left: 0; right: 0; top: 0; height: 2.5%; z-index: 3001; pointer-events: none; }
+  .vista-frontal .vacio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--sec); font-size: 13px; z-index: 3002; pointer-events: none; }
+  #di-sel input[type=range], #di-pendiente { accent-color: var(--sol); }
+  .vista-superior { width: 100%; display: block; border-radius: 10px; background: #12181D; }
+  .vista-superior [data-o] { cursor: pointer; }
+  #di-varios[aria-pressed="true"] { border-color: var(--sol); color: var(--sol); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1 id="titulo">Luz del acuario</h1>
+      <div class="sec" id="subtitulo">Week Aqua L900 Pro · 4 canales</div>
+    </div>
+    <button id="chip" type="button"><i></i><span>Conectar</span></button>
+  </header>
+  <p id="aviso" role="status" aria-live="polite"></p>
+
+  <!-- BIENVENIDA -->
+  <section id="bienvenida" class="pila" hidden aria-label="Bienvenida" style="gap: 18px; padding-top: 8px">
+    <div class="vista-frontal" style="aspect-ratio: 100/45" aria-hidden="true"><div class="agua"></div><div class="sustrato"></div>
+      <div class="luz" style="background: #F3E6C8; opacity: .25"></div><div class="barra-luz" style="background: #F3E6C8; opacity: .9"></div></div>
+    <h2 style="font-size: 26px; line-height: 1.15; letter-spacing: -0.02em">Tu acuario, con la luz que necesita</h2>
+    <p class="sec" style="margin: 0; font-size: 15px">Controla tu lámpara Week Aqua, diseña tu acuario y lleva su bitácora, todo en un solo lugar.</p>
+    <ul class="lista" style="margin: 0; padding: 0; list-style: none">
+      <li><b style="color: var(--sol)">1</b><span><b>Registra tu acuario</b><br><span class="sec">Medidas, tipo, fecha de montaje, plantas y habitantes.</span></span></li>
+      <li><b style="color: var(--sol)">2</b><span><b>Diseña cómo se verá</b><br><span class="sec">Acomoda plantas, rocas y troncos por zonas y míralo de frente.</span></span></li>
+      <li><b style="color: var(--sol)">3</b><span><b>Enlaza tu lámpara</b><br><span class="sec">El horario vive en la lámpara: funciona aunque el celular esté apagado.</span></span></li>
+      <li><b style="color: var(--sol)">4</b><span><b>Recibe recomendaciones</b><br><span class="sec">Luz, CO₂ y abonado según tus plantas y habitantes.</span></span></li>
+    </ul>
+    <button id="empezar" class="btn prim" type="button" style="height: 52px">Empezar</button>
+    <span class="sec" style="text-align: center">Sin cuenta y sin internet: tus datos se quedan en tu teléfono.</span>
+  </section>
+
+  <!-- DISEÑADOR -->
+  <section id="disenador" class="pila" hidden aria-label="Diseñar acuario">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px">
+      <div><h2 style="font-size: 22px">Diseñar acuario</h2><div class="sec num" id="di-medidas"></div></div>
+      <button id="di-listo" class="btn prim" type="button" style="flex: 0 0 auto">Listo</button>
+    </div>
+    <div id="di-vista" style="touch-action: none"></div>
+    <span id="di-faltan" class="sec"></span>
+    <p id="di-ayuda" class="sec" style="margin: 0">Toca una planta, roca o tronco para elegirlo y arrástralo a donde quieras. Más abajo = más al frente. Arriba de una roca o tronco = amarrada encima.</p>
+    <div id="di-sel" class="tarjeta pila" style="gap: 10px; padding: 12px 14px" hidden>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
+        <b id="di-sel-nombre" style="color: var(--sol)"></b>
+        <button id="di-soltar" class="chip" type="button">Listo</button>
+      </div>
+      <label class="pila" style="gap: 4px"><span class="sec">Tamaño · <span id="di-tamano-v" class="num">100 %</span></span>
+        <input id="di-tamano" type="range" min="40" max="200" step="5" value="100" aria-label="Tamaño"></label>
+      <label id="di-copias-fila" class="pila" style="gap: 4px"><span class="sec">Plantas en la mata · <span id="di-copias-v" class="num">3</span></span>
+        <input id="di-copias" type="range" min="1" max="8" step="1" value="3" aria-label="Plantas en la mata"></label>
+      <label class="pila" style="gap: 4px"><span class="sec">Giro · <span id="di-giro-v" class="num">0°</span></span>
+        <input id="di-giro" type="range" min="-45" max="45" step="1" value="0" aria-label="Giro"></label>
+      <div class="fila">
+        <button id="di-voltear" class="btn" type="button" aria-label="Voltear">↔ Voltear</button>
+        <button id="di-duplicar" class="btn" type="button">Duplicar</button>
+        <button id="di-borrar" class="btn" type="button">Borrar</button>
+      </div>
+      <div class="fila">
+        <button id="di-atras" class="btn" type="button">Atrás</button>
+        <button id="di-frente" class="btn" type="button">Al frente</button>
+      </div>
+      <div class="fila">
+        <button id="di-varios" class="btn" type="button" aria-pressed="false">Elegir varios</button>
+        <button id="di-especie" class="btn" type="button">Toda la especie</button>
+      </div>
+    </div>
+    <div class="pila" style="gap: 8px">
+      <h2>Agregar</h2>
+      <label class="campo"><span class="solo-lector">Buscar planta, roca o tronco</span><input id="di-buscar" type="search" placeholder="Buscar planta, roca o tronco"></label>
+      <div id="di-paleta" class="chips envolver"></div>
+      <details class="plegable">
+        <summary><h2>Sustrato</h2></summary>
+        <div class="pila" style="gap: 8px; padding-top: 8px">
+          <label class="pila" style="gap: 4px"><span class="sec">Más alto atrás · <span id="di-pendiente-v" class="num">0 cm</span></span>
+            <input id="di-pendiente" type="range" min="0" max="15" step="1" value="0" aria-label="Cuánto más alto está el sustrato atrás"></label>
+          <div id="di-perfiles" class="chips envolver"></div>
+        </div>
+      </details>
+      <details class="plegable">
+        <summary><h2>Empezar con un estilo</h2></summary>
+        <div id="di-plantillas" class="chips envolver" style="padding-top: 8px"></div>
+      </details>
+      <div class="fila">
+        <button id="di-auto" class="btn" type="button">Autocompletar</button>
+        <button id="di-vaciar" class="btn" type="button">Vaciar</button>
+      </div>
+    </div>
+    <div class="pila" style="gap: 8px">
+      <h2>Vista desde arriba <span class="sec" style="font-weight: 400">· toca una mancha para elegirla</span></h2>
+      <div id="di-arriba"></div>
+    </div>
+    <div id="di-avisos" class="nota-aviso" role="note" hidden></div>
+    <!-- Lista de compras: oculta por ahora (el código sigue listo). -->
+    <div class="pila" style="gap: 8px" hidden>
+      <h2>Lista de compras <span class="sec" style="font-weight: 400">· aproximada</span></h2>
+      <div id="di-leyenda" class="tarjeta lista" style="padding: 4px 14px"></div>
+      <button id="di-copiar" class="btn" type="button">Copiar lista</button>
+    </div>
+    <button id="di-imagen" class="btn" type="button">Guardar imagen</button>
+  </section>
+
+  <!-- PRIMER USO -->
+  <section id="registro" class="pila" hidden aria-label="Registrar acuario">
+    <div class="progreso" aria-hidden="true"><span id="pr1"></span><span id="pr2"></span><span id="pr3"></span></div>
+
+    <div id="paso1" class="pila">
+      <h2 style="font-size: 22px">Tu acuario</h2>
+      <label class="campo">Nombre<input id="a-nombre" maxlength="40" value="Mi acuario"></label>
+      <div>
+        <div class="campo" style="margin-bottom: 6px">Medidas en cm</div>
+        <div class="fila num">
+          <label class="campo">Largo<input id="a-largo" type="number" min="10" max="400" value="100" inputmode="numeric"></label>
+          <label class="campo">Ancho<input id="a-ancho" type="number" min="10" max="200" value="35" inputmode="numeric"></label>
+          <label class="campo">Alto<input id="a-alto" type="number" min="10" max="200" value="45" inputmode="numeric"></label>
+        </div>
+        <div class="sec num" style="margin-top: 6px">Volumen aproximado: <b id="a-litros" style="color: var(--texto)"></b></div>
+        <div class="chips num" id="comunes" style="margin-top: 8px">
+          <button type="button" class="chip" data-m="60,30,36">60×30×36</button>
+          <button type="button" class="chip" data-m="90,45,45">90×45×45</button>
+          <button type="button" class="chip" data-m="120,50,50">120×50×50</button>
+        </div>
+      </div>
+      <fieldset style="border: none; margin: 0; padding: 0" class="pila">
+        <legend class="campo" style="padding: 0; margin-bottom: 6px">Tipo de acuario</legend>
+        <label class="opcion"><input type="radio" name="tipo" value="co2" checked><span><b>Plantado con CO₂</b><br><span class="sec">Permite plantas exigentes como la Cuba</span></span></label>
+        <label class="opcion"><input type="radio" name="tipo" value="sin-co2"><span><b>Plantado sin CO₂</b><br><span class="sec">Plantas fáciles, luz media o baja</span></span></label>
+        <label class="opcion"><input type="radio" name="tipo" value="peces"><span><b>Solo peces o decoración</b><br><span class="sec">La luz es para ver, no para crecer</span></span></label>
+      </fieldset>
+      <fieldset style="border: none; margin: 0; padding: 0" class="pila">
+        <legend class="campo" style="padding: 0; margin-bottom: 6px">¿Cuándo lo montaste?</legend>
+        <div class="fila">
+          <button id="a-montando" type="button" class="chip" style="height: 48px; border-radius: 12px" aria-pressed="true">Lo estoy montando</button>
+          <label class="campo"><span class="solo-lector">Fecha de montaje</span><input id="a-fecha" type="date"></label>
+        </div>
+        <span class="sec">Si lo estás montando: 6 h de luz la primera semana y 30 min más cada semana.</span>
+      </fieldset>
+      <button id="ir-paso2" class="btn prim" type="button">Siguiente</button>
+    </div>
+
+    <div id="paso2" class="pila" hidden>
+      <h2 style="font-size: 22px">¿Qué tiene tu acuario?</h2>
+      <span class="sec">Con esto te recomendamos luz, CO₂ y abonado. Puedes cambiarlo después.</span>
+      <div class="pila" style="gap: 8px">
+        <div style="display: flex; justify-content: space-between"><h2>Plantas</h2><span class="sec num" id="n-plantas"></span></div>
+        <label class="campo"><span class="solo-lector">Buscar planta</span><input id="buscar-planta" type="search" placeholder="Buscar planta"></label>
+        <div id="lista-plantas" class="chips envolver"></div>
+      </div>
+      <div class="pila" style="gap: 8px">
+        <h2>Habitantes</h2>
+        <div id="lista-habitantes" class="tarjeta lista num" style="padding: 4px 14px"></div>
+      </div>
+      <div class="fila">
+        <button id="volver-paso1" class="btn" type="button">Atrás</button>
+        <button id="ir-paso3" class="btn prim" type="button">Siguiente</button>
+      </div>
+    </div>
+
+    <div id="paso3" class="pila" hidden>
+      <h2 style="font-size: 22px">Enlaza tu lámpara</h2>
+      <p class="sec" style="margin: 0">Cierra la app Week Aqua: la lámpara solo acepta una conexión a la vez. Enlazar no cambia nada en la lámpara.</p>
+      <button id="enlazar" class="btn" type="button">Conectar lámpara</button>
+      <div class="fila">
+        <button id="volver-paso2" class="btn" type="button">Atrás</button>
+        <button id="terminar" class="btn prim" type="button">Terminar</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACUARIO -->
+  <section id="tab-acuario" class="pila" aria-labelledby="t-acuario" hidden>
+    <div class="pila" style="gap: 8px">
+      <div id="ac-dibujo"></div>
+      <button id="disenar" class="btn" type="button">Editar diseño del acuario</button>
+      <div class="fila">
+        <button id="ac-encender" class="btn prim" type="button">Encender</button>
+        <button id="ac-apagar" class="btn" type="button">Apagar suave</button>
+      </div>
+    </div>
+    <div class="tarjeta pila" style="gap: 10px">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px">
+        <div><h2 id="ac-nombre" style="font-size: 20px"></h2><div class="sec num" id="ac-medidas"></div></div>
+        <button id="editar-acuario" class="chip" type="button">Editar</button>
+      </div>
+      <div class="sec num" id="ac-montaje"></div>
+    </div>
+    <div id="ac-recomendacion" class="pila"></div>
+    <div class="tarjeta pila" style="gap: 8px">
+      <h2>Plantas</h2><div id="ac-plantas" class="chips envolver"></div>
+      <h2 style="margin-top: 6px">Habitantes</h2><div id="ac-habitantes" class="sec num"></div>
+    </div>
+  </section>
+
+  <!-- AHORA -->
+  <section id="tab-ahora" class="pila" aria-labelledby="t-ahora" hidden>
+    <div class="tarjeta" style="display: flex; flex-direction: column; gap: 8px">
+      <div class="fila">
+        <button id="encender" class="btn prim" type="button">Encender</button>
+        <button id="apagar" class="btn" type="button">Apagar suave</button>
+      </div>
+      <button id="volver" class="btn" type="button">Volver a mi horario</button>
+      <span class="sec">"Encender" ignora el horario hasta que toques "Volver a mi horario".</span>
+    </div>
+
+    <div class="tarjeta">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px">
+        <span class="sec">Mezcla activa</span><b id="activa"></b>
+      </div>
+      <div id="vista"></div>
+      <div id="potencia-fila" class="canal num" style="--c: var(--texto)">
+        <label for="potencia"><span>Potencia</span><span id="v-potencia"></span></label>
+        <input id="potencia" type="range" min="0" max="100">
+        <button class="paso" type="button" data-d="-1" aria-label="Bajar potencia 5 %">−</button>
+        <button class="paso" type="button" data-d="1" aria-label="Subir potencia 5 %">+</button>
+      </div>
+      <div id="canales"></div>
+      <label class="interruptor" style="margin-top: 8px">
+        <span>Ver en la lámpara mientras muevo<br><span class="sec">Cambia el color de la lámpara al momento</span></span>
+        <input id="envivo" type="checkbox" checked>
+      </label>
+      <div class="fila" style="margin-top: 10px">
+        <button id="guardar-mia" class="btn" type="button">Guardar como mía</button>
+        <button id="actualizar-mia" class="btn" type="button" hidden>Guardar cambios</button>
+        <button id="borrar-mia" class="btn" type="button" hidden style="flex: 0 0 auto">Borrar</button>
+      </div>
+      <form id="form-mia" class="fila" hidden style="margin-top: 8px">
+        <label for="nombre-mia" class="solo-lector">Nombre de la mezcla</label>
+        <input id="nombre-mia" required maxlength="30" placeholder="Nombre, p. ej. Tarde cálida" style="flex: 2; height: 48px; border-radius: 12px; border: 1px solid var(--linea); background: var(--bg); color: var(--texto); font: inherit; padding: 0 12px">
+        <button class="btn prim" type="submit">Guardar</button>
+      </form>
+    </div>
+
+    <section class="pila" style="gap: 8px">
+      <h2>Mezclas listas</h2>
+      <div id="categorias" class="chips" role="group" aria-label="Categorías"></div>
+      <div id="mezclas" class="mezclas"></div>
+    </section>
+  </section>
+
+  <!-- HORARIO -->
+  <section id="tab-horario" class="pila" aria-labelledby="t-horario" hidden>
+    <div class="fila num">
+      <label class="hora">Encender<input id="h-encender" type="time" value="10:00"></label>
+      <label class="hora">Apagar<input id="h-apagar" type="time" value="20:00"></label>
+    </div>
+    <div class="pila" style="gap: 6px">
+      <h2>Amanecer y atardecer</h2>
+      <div id="rampas" class="rampas num" role="group" aria-label="Duración del amanecer y atardecer"></div>
+    </div>
+    <div class="tarjeta num" id="resumen" style="font-size: 15px"></div>
+    <div class="tarjeta" style="display: flex; align-items: center; gap: 12px">
+      <div id="barras-dia" class="barras" style="width: 40px; height: 28px" aria-hidden="true"></div>
+      <div style="flex: 1"><div class="sec">Color del día</div><div id="color-dia" class="num" style="font-weight: 600"></div></div>
+      <button id="usar-ahora" class="chip" type="button">Usar los de Ahora</button>
+    </div>
+    <button id="guardar" class="btn prim" type="button">Guardar en la lámpara</button>
+    <div class="tarjeta pila" style="gap: 8px">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px">
+        <div><h2>Simular día</h2><span class="sec">Amanecer, día y atardecer en 2½ minutos, con tu color del día.</span></div>
+        <button id="simular" class="btn" type="button" style="flex: 0 0 auto">Simular</button>
+      </div>
+      <div id="sim-barra" hidden style="height: 6px; border-radius: 3px; background: var(--linea); overflow: hidden"><div id="sim-avance" style="height: 100%; width: 0; background: var(--sol); transition: width .5s"></div></div>
+      <span id="sim-estado" class="sec num" aria-live="polite"></span>
+    </div>
+    <p id="guardado" class="sec" style="margin: 0"></p>
+    <p class="sec" style="margin: 0">Al guardar también se pone la hora de la lámpara con la de tu celular. La lámpara sigue el horario aunque el celular esté apagado.</p>
+  </section>
+
+  <!-- BITÁCORA -->
+  <section id="tab-bitacora" class="pila" aria-labelledby="t-bitacora" hidden>
+    <div class="tarjeta num" id="bi-resumen"></div>
+    <div class="pila" style="gap: 8px">
+      <h2>Anotar</h2>
+      <label class="campo"><span class="solo-lector">Detalle</span><input id="bi-detalle" maxlength="80" placeholder="Detalle opcional: 30 %, pH 6.8, 5 ml…"></label>
+      <div id="bi-tipos" class="mezclas" style="grid-template-columns: repeat(3, minmax(0, 1fr))"></div>
+    </div>
+    <div class="pila" style="gap: 8px">
+      <h2>Historial</h2>
+      <div id="bi-historial" class="tarjeta lista num" style="padding: 4px 14px"></div>
+    </div>
+  </section>
+</main>
+
+<nav id="nav" role="tablist" aria-label="Secciones" hidden>
+  <button id="t-acuario" type="button" role="tab" aria-controls="tab-acuario"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15c3-1.5 6-1.5 9 0s6 1.5 9 0"/></svg>Acuario</button>
+  <button id="t-ahora" type="button" role="tab" aria-controls="tab-ahora"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Luz</button>
+  <button id="t-horario" type="button" role="tab" aria-controls="tab-horario"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Horario</button>
+  <button id="t-bitacora" type="button" role="tab" aria-controls="tab-bitacora"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6Z"/><path d="M9 12h7M9 16h5"/></svg>Bitácora</button>
+</nav>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
