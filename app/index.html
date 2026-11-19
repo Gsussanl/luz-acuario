@@ -132,6 +132,13 @@
   /* Diseñador: en celular vertical todo en una columna; en tablet y en celular acostado, dibujo a un lado y herramientas al otro. */
   .di-cols { display: flex; flex-direction: column; gap: 14px; }
   .di-izq, .di-der { gap: 14px; min-width: 0; }
+  /* Zoom: la vista se hace más ancha (no transform) dentro de una caja que se desplaza; así tocar y arrastrar siguen igual. */
+  .zoom-caja { overflow: auto; scrollbar-width: thin; border-radius: 14px; }
+  #di-vista { width: calc(100% * var(--zoom, 1)); }
+  .zoom-barra { display: flex; align-items: center; gap: 8px; margin-top: -6px; }
+  .zoom-barra .btn { height: 40px; min-width: 44px; padding: 0 12px; }
+  @media (pointer: coarse) { .zoom-barra .btn { height: 44px; } }
+  .zoom-barra .sec:last-child { margin-left: auto; font-size: 12px; text-align: right; }
   /* Con el dedo: todo lo que se toca mide al menos 44 px. */
   @media (pointer: coarse) {
     .chip { height: 44px; }
@@ -157,7 +164,7 @@
     #disenador > div:first-child .btn { height: 40px; }
     .di-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 40%); gap: 12px; align-items: start; }
     .di-izq { position: sticky; top: 8px; }
-    .di-izq .tanque { width: min(100%, calc((100dvh - 80px) / var(--prop, .5))); margin: 0 auto; }
+    .di-izq .zoom-caja { width: min(100%, calc((100dvh - 130px) / var(--prop, .5))); margin: 0 auto; }
     .di-der { max-height: calc(100dvh - 70px); overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
   }
   [hidden] { display: none !important; }
@@ -198,7 +205,14 @@
     </div>
     <div class="di-cols">
     <div class="di-izq pila">
-    <div id="di-vista"></div>
+    <div id="di-zoom-caja" class="zoom-caja"><div id="di-vista"></div></div>
+    <div class="zoom-barra">
+      <button id="di-zoom-menos" class="btn" type="button" aria-label="Alejar">−</button>
+      <span id="di-zoom-v" class="sec num">1×</span>
+      <button id="di-zoom-mas" class="btn" type="button" aria-label="Acercar">+</button>
+      <button id="di-zoom-ajustar" class="btn" type="button">Ajustar</button>
+      <span class="sec">Dos dedos: acercar y mover</span>
+    </div>
     <span id="di-faltan" class="sec"></span>
     </div>
     <div class="di-der pila">

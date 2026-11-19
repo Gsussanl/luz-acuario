@@ -190,7 +190,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   function abrirDisenador() {
     $('disenador').hidden = false; $('nav').hidden = true;
     document.querySelectorAll('main > section[id^="tab-"]').forEach(s => { s.hidden = true; });
-    elegir(null); varios = false; editandoMalla = false; puntos = new Set(); pintarDisenador(); scrollTo(0, 0);
+    elegir(null); varios = false; editandoMalla = false; puntos = new Set(); pintarDisenador(); ponerZoom(1); scrollTo(0, 0);
   }
   function pintarDisenador() {
     const { objetos } = diseno(), { selP } = seleccion(), numeros = numerar(objetos);
@@ -198,6 +198,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     grupo = new Set([...grupo].filter(id => objetos.some(o => o.id === id)));
     if (!grupo.has(sel)) sel = [...grupo][0] || null;
     $('di-medidas').textContent = `${a.largo} × ${a.alto} cm`;
+    $('di-zoom-caja').style.setProperty('--prop', (a.alto / a.largo * 1.09).toFixed(3)); // alto/ancho del dibujo (acostado)
     dibujar('di-vista', colorVista(), [...grupo]);
     pintarArriba();
     pintarAtajos(); pintarMalla();
@@ -253,8 +254,9 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     $('di-ayuda').hidden = !!o;
     $('di-varios').setAttribute('aria-pressed', varios);
     $('di-varios').textContent = varios ? 'Elegir varios: sí' : 'Elegir varios';
-    // Sin nada elegido, deslizar sobre el dibujo desplaza la página; con algo elegido, lo mueve.
-    for (const id of ['di-vista', 'di-arriba']) $(id).style.touchAction = grupo.size ? 'none' : 'pan-y';
+    // Sin nada elegido, deslizar sobre el dibujo desplaza la página (o el zoom); con algo elegido, lo mueve.
+    $('di-arriba').style.touchAction = grupo.size ? 'none' : 'pan-y';
+    tactil();
     if (!o) return;
     $('di-fijar').setAttribute('aria-pressed', !!o.fijo);
     $('di-fijar').textContent = o.fijo ? 'Profundidad fija: solo se mueve de lado' : 'Fijar profundidad';
@@ -508,6 +510,81 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   };
   $('di-vista').addEventListener('pointerup', soltar);
   $('di-vista').addEventListener('pointercancel', soltar);
+
+  // ---------- Zoom de la vista frontal (1× a 4×) ----------
+  // La vista se hace más ancha dentro de una caja que se desplaza: tocar, elegir y arrastrar funcionan igual a cualquier zoom.
+  // Un dedo: elegir y arrastrar. Dos dedos: pellizcar para acercar y mover para desplazarse. Se olvida al cerrar el diseñador.
+  const ZOOM_MAX = 4, PASOS_ZOOM = [1, 1.5, 2, 3, 4];
+  let zoom = 1;
+  const cajaZoom = $('di-zoom-caja');
+  /** Cambia el zoom dejando quieto el punto (px, py) de la pantalla (por defecto, el centro de la caja). */
+  function ponerZoom(z, px, py) {
+    const caja = cajaZoom.getBoundingClientRect();
+    z = Math.round(Math.min(ZOOM_MAX, Math.max(1, z)) * 100) / 100;
+    if (z === zoom && z !== 1) return;
+    px ??= caja.left + caja.width / 2; py ??= caja.top + caja.height / 2;
+    // Punto del dibujo bajo (px, py), en fracción del ancho y alto a zoom 1.
+    const fx = (cajaZoom.scrollLeft + px - caja.left) / zoom, fy = (cajaZoom.scrollTop + py - caja.top) / zoom;
+    if (zoom === 1 && z > 1) cajaZoom.style.height = `${cajaZoom.offsetHeight}px`; // la ventana conserva el alto de 1×
+    zoom = z;
+    $('di-vista').style.setProperty('--zoom', z);
+    if (z === 1) { cajaZoom.style.height = ''; cajaZoom.scrollTo(0, 0); }
+    else { cajaZoom.scrollLeft = fx * z - (px - caja.left); cajaZoom.scrollTop = fy * z - (py - caja.top); }
+    $('di-zoom-v').textContent = `${Math.round(z * 10) / 10}×`.replace('.', ',');
+    $('di-zoom-menos').disabled = z <= 1; $('di-zoom-mas').disabled = z >= ZOOM_MAX; $('di-zoom-ajustar').disabled = z === 1;
+    tactil();
+  }
+  /** Gestos del navegador sobre el dibujo: con algo elegido, ninguno (el dedo lo mueve); si no, desplazar (y con zoom, también de lado). */
+  function tactil() {
+    $('di-vista').style.touchAction = grupo.size ? 'none' : zoom > 1 ? 'pan-x pan-y' : 'pan-y';
+  }
+  $('di-zoom-mas').onclick = () => ponerZoom(PASOS_ZOOM.find(z => z > zoom + 0.01) || ZOOM_MAX);
+  $('di-zoom-menos').onclick = () => ponerZoom([...PASOS_ZOOM].reverse().find(z => z < zoom - 0.01) || 1);
+  $('di-zoom-ajustar').onclick = () => ponerZoom(1);
+  // Pellizco: se escuchan los dedos antes que el arrastre (fase de captura); con dos dedos, el arrastre se cancela.
+  const dedos = new Map();
+  let pellizco = null, eleccionAntes = null; // lo elegido antes del primer dedo: un pellizco no elige nada
+
+  const datosPellizco = () => {
+    const [a, b] = [...dedos.values()];
+    return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  };
+  cajaZoom.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'touch') return;
+    dedos.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (dedos.size === 1) { eleccionAntes = { sel, grupo: new Set(grupo) }; return; }
+    e.stopPropagation(); e.preventDefault();
+    if (arrastre) { diseno().objetos = arrastre.antes; arrastre = null; cancelAnimationFrame(cuadro); }
+    if (eleccionAntes && (eleccionAntes.sel !== sel || eleccionAntes.grupo.size !== grupo.size)) { sel = eleccionAntes.sel; grupo = eleccionAntes.grupo; }
+    pintarDisenador();
+    const p = datosPellizco();
+    pellizco = { d0: p.d, z0: zoom, x: p.x, y: p.y };
+    for (const id of dedos.keys()) try { cajaZoom.setPointerCapture(id); } catch { /* */ }
+  }, true);
+  cajaZoom.addEventListener('pointermove', e => {
+    if (!dedos.has(e.pointerId)) return;
+    dedos.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!pellizco || dedos.size < 2) return;
+    e.stopPropagation();
+    const p = datosPellizco();
+    ponerZoom(pellizco.z0 * p.d / pellizco.d0, p.x, p.y);
+    cajaZoom.scrollLeft -= p.x - pellizco.x; cajaZoom.scrollTop -= p.y - pellizco.y; // mover con los dos dedos
+    pellizco.x = p.x; pellizco.y = p.y;
+  }, true);
+  const quitarDedo = e => {
+    if (!dedos.delete(e.pointerId)) return;
+    if (pellizco) { e.stopPropagation(); if (!dedos.size) pellizco = null; }
+  };
+  cajaZoom.addEventListener('pointerup', quitarDedo, true);
+  cajaZoom.addEventListener('pointercancel', quitarDedo, true);
+  // Trackpad o Ctrl + rueda en computadora.
+  cajaZoom.addEventListener('wheel', e => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    ponerZoom(zoom * Math.exp(-e.deltaY / 200), e.clientX, e.clientY);
+  }, { passive: false });
+  let anchoAntes = innerWidth; // al girar la pantalla (cambia el ancho, no solo la barra del navegador), volver a 1×
+  addEventListener('resize', () => { if (innerWidth !== anchoAntes) { anchoAntes = innerWidth; if (zoom > 1) ponerZoom(1); } });
 
   // Vista desde arriba: tocar elige; con algo elegido, arrastrar lo mueve (de lado y hacia adelante/atrás).
   let arrastreArriba = null;
