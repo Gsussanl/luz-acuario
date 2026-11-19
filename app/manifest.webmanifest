@@ -1,7 +1,7 @@
 {
   "name": "Luz del acuario",
   "short_name": "Luz acuario",
-  "description": "Control de lámparas de acuario Week Aqua por Bluetooth",
+  "description": "Luz, diseño y bitácora de tu acuario",
   "lang": "es",
   "start_url": "./",
   "scope": "./",

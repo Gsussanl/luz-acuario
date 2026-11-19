@@ -78,7 +78,9 @@ export function recomendar(plantas, habitantes, { co2, nuevo, sustrato = 'aquaso
 
   const abonado = { ...ABONADO[co2 ? nivel : Math.min(nivel, 2)] };
   abonado.sustrato = sustrato === 'aquasoil'
-    ? 'El aquasoil ya trae nutrientes: el primer año basta con el abono líquido de arriba.'
+    ? (dias > 540 // ~18 meses: el aquasoil ya soltó lo que traía
+      ? 'Tu aquasoil ya no aporta nutrientes: usa el abono líquido de arriba y añade pastillas de abono en las raíces cada 2–3 meses.'
+      : 'El aquasoil ya trae nutrientes: el primer año basta con el abono líquido de arriba.')
     : `La ${sustrato === 'silice' ? 'arena sílice' : 'gravilla'} no trae nutrientes: todo depende del abono líquido y de las pastillas.`;
   avisos.push(...avisosDeSustrato(plantas, habitantes, sustrato, dias));
   if (hayRojas) abonado.extra = 'Las plantas rojas agradecen hierro extra.';

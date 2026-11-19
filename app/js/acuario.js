@@ -190,6 +190,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     $('di-arriba').innerHTML = vistaSuperior({ acuario: a, objetos, catalogo: plantas, seleccion: [...grupo] });
     const s = diseno().sustrato || {};
     $('di-pendiente').value = s.atras || 0; $('di-pendiente-v').textContent = `${s.atras || 0} cm`;
+    $('di-frente-alto').value = s.frente ?? 3; $('di-frente-alto-v').textContent = `${s.frente ?? 3} cm`;
     const tipo = tipoSustrato(a);
     $('di-sustratos').innerHTML = Object.entries(SUSTRATOS).map(([id, x]) => `<button type="button" class="chip planta" data-sustrato="${id}" aria-pressed="${tipo === id}">${x.nombre}</button>`).join('');
     $('di-perfiles').innerHTML = PERFILES.map(x => `<button type="button" class="chip planta" data-perfil="${x.id}" aria-pressed="${(s.perfil || 'plano') === x.id}">${x.nombre}</button>`).join('');
@@ -507,6 +508,13 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     pintarSustratoCompra();
   };
   $('di-pendiente').onchange = () => { guardar(); pintarDisenador(); };
+  $('di-frente-alto').oninput = e => {
+    diseno().sustrato = { ...diseno().sustrato, frente: +e.target.value };
+    $('di-frente-alto-v').textContent = `${e.target.value} cm`;
+    dibujar('di-vista', colorVista(), [...grupo]);
+    pintarSustratoCompra();
+  };
+  $('di-frente-alto').onchange = () => { guardar(); pintarDisenador(); };
   $('di-perfiles').addEventListener('click', e => {
     const b = e.target.closest('[data-perfil]'); if (!b) return;
     const s = diseno().sustrato || {};

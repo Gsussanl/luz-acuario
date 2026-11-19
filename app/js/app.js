@@ -2,6 +2,7 @@ import { crearBluetooth } from './ble.js';
 import { iniciarAcuario } from './acuario.js';
 import { CANALES, MANUAL, cmdColor, cmdHorario, guardarHorario, ponerHora, dentroDeHorario, encenderSiempre, pasosApagado, horasCompletas } from './protocolo.js';
 
+export const VERSION = '0.9.0-beta'; // sube el último número en cada publicación; 1.0.0 = lista para la tienda
 const $ = id => document.getElementById(id);
 const COLORES_CSS = ['var(--rojo)', 'var(--verde)', 'var(--azul)', 'var(--uv)'];
 const RAMPAS = [0, 30, 60, 90, 120, 150];
@@ -339,7 +340,9 @@ iniciarAcuario({ $, avisar, alUsarMezcla: usarMezcla, alUsarHoras: usarHoras, al
   })
   .catch(() => { $('nav').hidden = false; mostrarPestana('t-ahora'); avisar('No pude cargar el catálogo del acuario. El control de la luz funciona igual.', true); });
 if (!ble.disponible()) avisar('Este navegador no tiene Bluetooth web. Ábrela en Chrome para Android.', true);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+// La versión nombra la caché del service worker: cada publicación (versión nueva) actualiza la app instalada.
+$('version').textContent = `Versión ${VERSION.replace('-', ' ')}`;
+if ('serviceWorker' in navigator) navigator.serviceWorker.register(`sw.js?v=${VERSION}`).catch(() => {});
 
 // Al recargar, Chrome corta el Bluetooth: si la lámpara ya fue autorizada antes, se reconecta sola (sin tocar "Conectar").
 // shortcut: depende de getDevices(); si Chrome no lo tiene habilitado, hay que tocar "Conectar" como antes.

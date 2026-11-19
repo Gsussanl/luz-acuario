@@ -1,5 +1,5 @@
 {
-  "_leyenda": "Mezclas de 4 canales en % (rojo, verde, azul, uv) para la familia 4 (L900 Pro). Las de 'week' salen de la app oficial v3.0.25 (ModeSetting1Adapter + ModeSettingFragment.sendData); las 'propias' son punto de partida nuestro, sin medir.",
+  "_leyenda": "Mezclas de 4 canales en % (rojo, verde, azul, UV). Se revisó cómo maneja la lámpara sus colores y se armaron mezclas más fáciles de entender, agrupadas por uso.",
   "categorias": [
     {"id": "plantas", "nombre": "Plantas", "mezclas": [
       {"id": "crecimiento", "nombre": "Crecimiento", "canales": [80, 70, 60, 30], "nota": "Uso diario en plantados"},
@@ -17,7 +17,7 @@
       {"id": "aclimatacion", "nombre": "Aclimatación", "canales": [35, 30, 30, 0], "nota": "Primeros días de peces nuevos"},
       {"id": "luna", "nombre": "Luz de luna", "canales": [0, 0, 5, 0], "nota": "Azul al 5 %"}
     ]},
-    {"id": "week", "nombre": "Week Aqua (originales)", "mezclas": [
+    {"id": "clasicas", "nombre": "Clásicas", "mezclas": [
       {"id": "week-green", "nombre": "Green", "canales": [46, 97, 49, 100]},
       {"id": "week-red", "nombre": "Red", "canales": [71, 79, 49, 100]},
       {"id": "week-mixed", "nombre": "Mixed", "canales": [51, 95, 49, 100]},

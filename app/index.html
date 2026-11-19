@@ -120,7 +120,7 @@
     -webkit-mask-image: linear-gradient(#000, transparent 90%); mask-image: linear-gradient(#000, transparent 90%); }
   .vista-frontal .barra-luz { position: absolute; left: 0; right: 0; top: 0; height: 2.5%; z-index: 3001; pointer-events: none; }
   .vista-frontal .vacio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--sec); font-size: 13px; z-index: 3002; pointer-events: none; }
-  #di-sel input[type=range], #di-pendiente { accent-color: var(--sol); }
+  #di-sel input[type=range], #di-pendiente, #di-frente-alto { accent-color: var(--sol); }
   .vista-superior { width: 100%; display: block; border-radius: 10px; background: #12181D; }
   .vista-superior [data-o] { cursor: pointer; }
   #di-varios[aria-pressed="true"], #di-fijar[aria-pressed="true"] { border-color: var(--sol); color: var(--sol); }
@@ -205,6 +205,8 @@
           <div id="di-sustratos" class="chips envolver" aria-label="Tipo de sustrato"></div>
           <label class="pila" style="gap: 4px"><span class="sec">Más alto atrás · <span id="di-pendiente-v" class="num">0 cm</span></span>
             <input id="di-pendiente" type="range" min="0" max="15" step="1" value="0" aria-label="Cuánto más alto está el sustrato atrás"></label>
+          <label class="pila" style="gap: 4px"><span class="sec">Altura al frente · <span id="di-frente-alto-v" class="num">3 cm</span></span>
+            <input id="di-frente-alto" type="range" min="2" max="8" step="1" value="3" aria-label="Altura del sustrato al frente"></label>
           <div id="di-perfiles" class="chips envolver"></div>
         </div>
       </details>
@@ -415,6 +417,7 @@
       <div id="bi-historial" class="tarjeta lista num" style="padding: 4px 14px"></div>
     </div>
   </section>
+  <p id="version" class="sec num" style="margin: 8px 0 0; text-align: center; font-size: 12px"></p>
 </main>
 
 <nav id="nav" role="tablist" aria-label="Secciones" hidden>

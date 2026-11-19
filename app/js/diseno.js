@@ -201,7 +201,7 @@ export const SUSTRATOS = {
 };
 /** Tipo de sustrato del acuario; si no lo tiene guardado: aquasoil en plantados, gravilla en "solo peces". */
 /** Alto real que representa el mosaico de la textura: así los granos miden lo mismo con o sin pendiente. */
-export const TEXTURA_CM = 16;
+export const TEXTURA_CM = 7.5; // alto real que representa la foto (140 px de la franja central)
 export const tipoSustrato = acuario => SUSTRATOS[acuario?.sustrato] ? acuario.sustrato : acuario?.tipo === 'peces' ? 'gravilla' : 'aquasoil';
 /** Granitos al azar (semilla fija: siempre igual) en un cuadro de ancho × alto px: [x, y, radio, color]. */
 export function granos(tipo, ancho = 40, alto = 40, semilla = 7) {

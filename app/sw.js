@@ -1,6 +1,6 @@
 // Guarda la app para que abra sin internet (el Bluetooth no necesita internet).
 // Red primero: si hay conexión se usa la versión nueva; si no, la guardada.
-const CACHE = 'luz-acuario-v28';
+const CACHE = `luz-acuario-${new URL(location).searchParams.get('v') || 'dev'}`; // la versión viene de app.js
 const ARCHIVOS = ['./', 'index.html', 'js/app.js', 'js/ble.js', 'js/protocolo.js', 'manifest.webmanifest', 'icono-192.png', 'icono-512.png', '../datos/mezclas.json', 'js/acuario.js', '../datos/recomendar.js', '../datos/plantas.json', '../datos/habitantes.json', 'js/diseno.js'];
 
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARCHIVOS)).then(() => self.skipWaiting())));
