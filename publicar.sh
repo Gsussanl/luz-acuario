@@ -2,7 +2,7 @@
 # Copia la app desde el proyecto de trabajo y sube solo lo que cambió a GitHub Pages.
 # Solo pasa app/ (sin pruebas) y los 4 datos que usa; capturas, APKs, notas y la MAC nunca salen.
 set -e
-S="C:/Users/Gsus Santana/Proyectos/luz-acuario"; W="$(dirname "$0")"
+W="$(cd "$(dirname "$0")" && pwd)"; S="$W/../luz-acuario"  # proyecto de trabajo, al lado de esta carpeta
 rm -rf "$W/app" && cp -r "$S/app" "$W/" && rm -f "$W"/app/js/*.test.mjs
 for f in habitantes.json mezclas.json plantas.json recomendar.js; do cp "$S/datos/$f" "$W/datos/"; done
 cd "$W"; git add -A
