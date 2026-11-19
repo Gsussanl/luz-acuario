@@ -1,7 +1,7 @@
 // Módulo del acuario: registro, recomendación y bitácora. No sabe nada de Bluetooth;
 // solo le pasa al módulo de luz "usa esta mezcla" o "usa estas horas" cuando el usuario lo pide.
 import { recomendar, horasDeArranque, avisosDeGrupo } from '../../datos/recomendar.js';
-import { PAISAJE, ARENA, seccionesPara, autocompletar, celdasAObjetos, nuevoId, posicionInicial, numerar, avisosDiseno, vistaFrontal, montados, plantilla, PLANTILLAS, vistaSuperior, listaCompras, esAlfombra, PERFILES } from './diseno.js';
+import { PAISAJE, ARENA, seccionesPara, autocompletar, celdasAObjetos, nuevoId, posicionInicial, numerar, avisosDiseno, vistaFrontal, montados, plantilla, PLANTILLAS, vistaSuperior, listaCompras, esAlfombra, PERFILES, archivoPaisaje } from './diseno.js';
 
 const CLAVE = 'acuario';
 const TIPOS = { co2: 'Plantado con CO₂', 'sin-co2': 'Plantado sin CO₂', peces: 'Solo peces' };
@@ -232,7 +232,21 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     $('di-ayuda').hidden = !!o;
     $('di-varios').setAttribute('aria-pressed', varios);
     $('di-varios').textContent = varios ? 'Elegir varios: sí' : 'Elegir varios';
+    // Sin nada elegido, deslizar sobre el dibujo desplaza la página; con algo elegido, lo mueve.
+    for (const id of ['di-vista', 'di-arriba']) $(id).style.touchAction = grupo.size ? 'none' : 'pan-y';
     if (!o) return;
+    $('di-fijar').setAttribute('aria-pressed', !!o.fijo);
+    $('di-fijar').textContent = o.fijo ? 'Profundidad fija: solo se mueve de lado' : 'Fijar profundidad';
+    const pa = PAISAJE.find(z => z.id === o.paisaje);
+    $('di-tipo-fila').hidden = !pa; $('di-forma-fila').hidden = !(pa?.variantes > 1);
+    if (pa) {
+      const familia = pa.id.split('-')[0]; // roca o tronco
+      $('di-tipos').innerHTML = PAISAJE.filter(z => z.id.startsWith(familia + '-')).map(z =>
+        `<button type="button" class="chip planta" data-tipo="${z.id}" aria-pressed="${z.id === pa.id}">${escapar(z.nombre)}</button>`).join('');
+      const n = pa.variantes || 1;
+      $('di-formas').innerHTML = Array.from({ length: n }, (_, i) =>
+        `<button type="button" class="chip planta forma" data-forma="${i}" aria-pressed="${(o.v || 0) % n === i}"><img src="${archivoPaisaje(pa, i)}" alt="">${i + 1}</button>`).join('');
+    }
     $('di-sel-nombre').textContent = grupo.size > 1 ? `${grupo.size} elegidos` : nombreDe(o) || '';
     $('di-tamano').value = Math.round((o.escala || 1) * 100);
     $('di-tamano-v').textContent = `${Math.round((o.escala || 1) * 100)} %`;
@@ -279,6 +293,17 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   };
   $('di-copias').onchange = () => { guardar(); pintarDisenador(); };
   $('di-voltear').onclick = () => cambiar(o => { o.espejo = !o.espejo; });
+  $('di-fijar').onclick = () => { const fijar = !elegido()?.fijo; cambiar(o => { o.fijo = fijar; }); };
+  $('di-tipos').addEventListener('click', e => {
+    const b = e.target.closest('[data-tipo]'); if (!b) return;
+    const familia = b.dataset.tipo.split('-')[0];
+    cambiar(o => { if (o.paisaje?.startsWith(familia + '-')) { o.paisaje = b.dataset.tipo; o.v = 0; } });
+  });
+  $('di-formas').addEventListener('click', e => {
+    const b = e.target.closest('[data-forma]'); if (!b) return;
+    const tipo = elegido()?.paisaje;
+    cambiar(o => { if (o.paisaje === tipo) o.v = +b.dataset.forma; });
+  });
   $('di-frente').onclick = () => cambiar(o => { o.orden = (o.orden || 0) + 1; });
   $('di-atras').onclick = () => cambiar(o => { o.orden = (o.orden || 0) - 1; });
   $('di-duplicar').onclick = () => {
@@ -298,19 +323,11 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     grupo = new Set(diseno().objetos.filter(z => o.planta ? z.planta === o.planta : z.paisaje === o.paisaje).map(z => z.id));
     pintarDisenador();
   };
-  // Vista desde arriba: tocar una mancha la elige (y en el frente queda marcada).
-  $('di-arriba').addEventListener('click', e => {
-    const el = e.target.closest('[data-o]'); if (!el) return;
-    const id = el.dataset.o;
-    if (varios) { grupo.has(id) ? grupo.delete(id) : grupo.add(id); sel = grupo.has(id) ? id : [...grupo][0] || null; }
-    else elegir(id);
-    pintarDisenador();
-  });
-
-  // Arrastrar: mientras el dedo se mueve solo se desplazan las imágenes (fluido); al soltar se guarda y se redibuja.
-  let arrastre = null;
-  // Las imágenes tienen zonas transparentes: solo cuenta el toque donde de verdad hay planta/roca (si no, la alfombra "atrapa" todo).
+  // ---------- Tocar y arrastrar ----------
+  // Primer toque: elige (la página sigue pudiendo desplazarse). Con algo elegido, arrastrarlo lo mueve.
+  // Así no se mueven plantas sin querer al desplazar la página.
   const alfas = new Map();
+  /** ¿Hay imagen visible (no transparente) en ese punto? Considera giro y volteo. */
   function opaco(img, x, y) {
     if (!img.naturalWidth) return true;
     let m = alfas.get(img.src);
@@ -335,45 +352,129 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     if (img.style.transform.includes('scaleX(-1)')) u = 1 - u;
     return m.ctx.getImageData(Math.min(m.w - 1, u * m.w | 0), Math.min(m.h - 1, v * m.h | 0), 1, 1).data[3] > 40;
   }
-  $('di-vista').addEventListener('pointerdown', e => {
-    const el = document.elementsFromPoint(e.clientX, e.clientY)
-      .find(x => x.dataset?.o && $('di-vista').contains(x) && (x.tagName !== 'IMG' || opaco(x, e.clientX, e.clientY)));
-    if (!el) { if (grupo.size && !varios) { elegir(null); pintarDisenador(); } return; }
-    const id = el.dataset.o;
-    if (varios) {
-      if (grupo.has(id) && grupo.size > 1) { grupo.delete(id); sel = [...grupo][0]; pintarDisenador(); return; } // tocar de nuevo = quitar
-      grupo.add(id); sel = id;
-    } else if (!grupo.has(id)) elegir(id);
-    else sel = id;
-    dibujar('di-vista', colorVista(), [...grupo]); pintarBarra();
-    $('di-arriba').innerHTML = vistaSuperior({ acuario: datos.acuario, objetos: diseno().objetos, catalogo: plantas, seleccion: [...grupo] });
-    const caja = $('di-vista').querySelector('.vista-frontal').getBoundingClientRect();
+  /** Qué hay bajo el dedo: primero donde se ve exacto; si no, a unos píxeles (ramas finas del Manzanita o Spider). */
+  function bajoElDedo(x, y) {
+    const pilas = document.elementsFromPoint(x, y).filter(el => el.dataset?.o && $('di-vista').contains(el));
+    const exacto = pilas.find(el => el.tagName !== 'IMG' || opaco(el, x, y));
+    if (exacto) return exacto.dataset.o;
+    const R = 9, cerca = [[R, 0], [-R, 0], [0, R], [0, -R], [R, R], [-R, -R], [R, -R], [-R, R]];
+    for (const [dx, dy] of cerca) {
+      const el = document.elementsFromPoint(x + dx, y + dy).find(z => z.dataset?.o && $('di-vista').contains(z) && (z.tagName !== 'IMG' || opaco(z, x + dx, y + dy)));
+      if (el) return el.dataset.o;
+    }
+    return null;
+  }
+  /** Todo lo visible bajo el dedo, de adelante hacia atrás (para pasar al de atrás tocando otra vez). */
+  function todosBajoElDedo(x, y) {
+    return [...new Set(document.elementsFromPoint(x, y)
+      .filter(el => el.dataset?.o && $('di-vista').contains(el) && (el.tagName !== 'IMG' || opaco(el, x, y)))
+      .map(el => el.dataset.o))];
+  }
+  /** Lo que se mueve junto: lo elegido y lo que va montado encima de sus rocas o troncos. */
+  const quienesSeMueven = () => {
     const objs = diseno().objetos;
-    const ids = [...new Set(elegidos().flatMap(o => [o.id, ...(o.paisaje ? montados(objs, o, datos.acuario) : [])]))];
+    return [...new Set(elegidos().flatMap(o => [o.id, ...(o.paisaje ? montados(objs, o, datos.acuario) : [])]))];
+  };
+  /**
+   * Aplica un desplazamiento (x en %, b en % de la vista). Una planta solo queda "encima" (b bajo la arena)
+   * si cae sobre una roca o tronco; si no, se queda al fondo sobre la arena. "Fijar profundidad" solo deja moverla de lado.
+   */
+  function mover(ids, dx, db) {
+    const objs = diseno().objetos, mov = objs.filter(z => ids.includes(z.id));
+    for (const o of mov) {
+      o.x = Math.min(100, Math.max(0, o.x + dx));
+      if (!o.fijo) o.b = Math.min(ARENA[1] + 2, Math.max(15, o.b + db));
+    }
+    // Después de mover todo (las rocas también): lo que quedó "en el aire" sin roca o tronco debajo vuelve al fondo.
+    for (const o of mov)
+      if (o.planta && o.b < ARENA[0] && !objs.some(pa => pa.paisaje && montados([o], pa, datos.acuario).length)) o.b = ARENA[0] + 1;
+  }
+  function elegirConToque(id) {
+    if (varios) {
+      if (grupo.has(id) && grupo.size > 1) { grupo.delete(id); sel = [...grupo][0]; } // tocar de nuevo = quitar
+      else { grupo.add(id); sel = id; }
+    } else elegir(id);
+    pintarDisenador();
+  }
+
+  let arrastre = null;
+  $('di-vista').addEventListener('contextmenu', e => e.preventDefault()); // sin menú de copiar/descargar al mantener el dedo
+  $('di-vista').addEventListener('pointerdown', e => {
+    // Si lo elegido está bajo el dedo (aunque tenga algo encima), este toque es para él: arrastrar o pasar al de atrás.
+    const pila = todosBajoElDedo(e.clientX, e.clientY);
+    const id = !varios && pila.includes(sel) ? sel : pila[0] || bajoElDedo(e.clientX, e.clientY);
+    if (!id) { if (grupo.size && !varios) { elegir(null); pintarDisenador(); } return; }
+    if (!grupo.has(id) || varios) return elegirConToque(id); // primer toque: solo elegir
+    sel = id;
+    const caja = $('di-vista').querySelector('.vista-frontal').getBoundingClientRect();
+    const ids = quienesSeMueven();
     arrastre = { ids, x0: e.clientX, y0: e.clientY, caja, movio: false,
-      piezas: ids.flatMap(k => [...$('di-vista').querySelectorAll(`[data-o="${k}"]`)]) };
-    $('di-vista').setPointerCapture(e.pointerId);
+      fijos: new Set(elegidos().filter(o => o.fijo).map(o => o.id)),
+      piezas: ids.map(k => [k, [...$('di-vista').querySelectorAll(`[data-o="${k}"]`)]]) };
+    try { $('di-vista').setPointerCapture(e.pointerId); } catch { /* puntero ya liberado */ }
     e.preventDefault();
   });
   $('di-vista').addEventListener('pointermove', e => {
     if (!arrastre) return;
     const dx = e.clientX - arrastre.x0, dy = e.clientY - arrastre.y0;
-    if (Math.abs(dx) + Math.abs(dy) > 3) arrastre.movio = true;
-    for (const p of arrastre.piezas) p.style.translate = `${dx}px ${dy}px`;
+    if (Math.abs(dx) + Math.abs(dy) > 4) arrastre.movio = true;
+    for (const [k, piezas] of arrastre.piezas) for (const p of piezas) p.style.translate = `${dx}px ${arrastre.fijos.has(k) ? 0 : dy}px`;
   });
   const soltar = e => {
     if (!arrastre) return;
     const { ids, x0, y0, caja, movio } = arrastre; arrastre = null;
-    if (!movio) return;
-    const dx = (e.clientX - x0) / caja.width * 100, db = (e.clientY - y0) / caja.height * 100;
-    for (const o of diseno().objetos.filter(z => ids.includes(z.id))) {
-      o.x = Math.min(100, Math.max(0, o.x + dx));
-      o.b = Math.min(ARENA[1] + 2, Math.max(15, o.b + db));
+    if (!movio) { // tocar otra vez sin arrastrar: elegir lo que está detrás (p. ej. un tronco tapado por su helecho)
+      const pila = todosBajoElDedo(e.clientX, e.clientY);
+      if (!varios && pila.length > 1) { elegir(pila[(pila.indexOf(sel) + 1) % pila.length]); pintarDisenador(); avisar(`Elegido: ${nombreDe(elegido())}. Toca otra vez para pasar al de atrás.`); }
+      return;
     }
+    mover(ids, (e.clientX - x0) / caja.width * 100, (e.clientY - y0) / caja.height * 100);
     guardar(); pintarDisenador();
   };
   $('di-vista').addEventListener('pointerup', soltar);
   $('di-vista').addEventListener('pointercancel', soltar);
+
+  // Vista desde arriba: tocar elige; con algo elegido, arrastrar lo mueve (de lado y hacia adelante/atrás).
+  let arrastreArriba = null;
+  $('di-arriba').addEventListener('contextmenu', e => e.preventDefault());
+  $('di-arriba').addEventListener('pointerdown', e => {
+    const pila = [...new Set(document.elementsFromPoint(e.clientX, e.clientY).map(z => z.closest?.('[data-o]')?.dataset.o).filter(Boolean))];
+    if (!pila.length) return;
+    const id = !varios && pila.includes(sel) ? sel : pila[0];
+    if (!grupo.has(id) || varios) return elegirConToque(id);
+    sel = id;
+    const svg = $('di-arriba').querySelector('svg').getBoundingClientRect();
+    const a = datos.acuario;
+    arrastreArriba = { ids: quienesSeMueven(), x0: e.clientX, y0: e.clientY, cm: (a.largo + 4) / svg.width, antes: structuredClone(diseno().objetos), pila };
+    try { $('di-arriba').setPointerCapture(e.pointerId); } catch { /* puntero ya liberado */ }
+    e.preventDefault();
+  });
+  const pasoArriba = e => {
+    const r = arrastreArriba, a = datos.acuario;
+    diseno().objetos = structuredClone(r.antes); // se recalcula desde el inicio del arrastre: sin errores acumulados
+    const dxCm = (e.clientX - r.x0) * r.cm, dyCm = (e.clientY - r.y0) * r.cm;
+    const elevados = new Set(diseno().objetos.filter(o => r.ids.includes(o.id) && o.planta && o.b < ARENA[0]).map(o => o.id));
+    mover(r.ids.filter(id => !elevados.has(id)), dxCm / a.largo * 100, dyCm / a.ancho * (ARENA[1] - ARENA[0]));
+    mover([...elevados], dxCm / a.largo * 100, 0); // lo montado sigue a su soporte de lado; su altura no cambia
+  };
+  $('di-arriba').addEventListener('pointermove', e => {
+    if (!arrastreArriba) return;
+    pasoArriba(e);
+    $('di-arriba').innerHTML = vistaSuperior({ acuario: datos.acuario, objetos: diseno().objetos, catalogo: plantas, seleccion: [...grupo] });
+  });
+  const soltarArriba = e => {
+    if (!arrastreArriba) return;
+    const { x0, y0, pila } = arrastreArriba;
+    if (Math.abs(e.clientX - x0) + Math.abs(e.clientY - y0) <= 4) { // tocar otra vez sin arrastrar: el de abajo
+      diseno().objetos = arrastreArriba.antes; arrastreArriba = null;
+      if (pila.length > 1) { elegir(pila[(pila.indexOf(sel) + 1) % pila.length]); avisar(`Elegido: ${nombreDe(elegido())}. Toca otra vez para pasar al de abajo.`); }
+      return pintarDisenador();
+    }
+    pasoArriba(e); arrastreArriba = null;
+    guardar(); pintarDisenador();
+  };
+  $('di-arriba').addEventListener('pointerup', soltarArriba);
+  $('di-arriba').addEventListener('pointercancel', soltarArriba);
 
   // Sustrato: más alto atrás (cm) y forma a lo largo; las plantas y rocas se apoyan en la nueva altura.
   $('di-pendiente').oninput = e => {
@@ -524,6 +625,22 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   // Datos guardados por la versión anterior (sin diseño): arrancar con el automático.
   if (datos.acuario && !datos.diseno) { diseno().objetos = automatico(); guardar(); }
   pintarAcuario(); pintarBitacora();
+  detectarVariantes();
+
+  /**
+   * Formas de cada roca o tronco: busca roca-dragon-2.png, -3.png… en app/img/paisaje/.
+   * Así una forma nueva aparece sola, sin tocar el código (solo hay que guardarla con ese nombre).
+   */
+  async function detectarVariantes() {
+    const existe = src => new Promise(ok => { const i = new Image(); i.onload = () => ok(true); i.onerror = () => ok(false); i.src = src; });
+    let cambio = false;
+    await Promise.all(PAISAJE.map(async pa => {
+      let n = 1;
+      while (n < 9 && await existe(`img/paisaje/${pa.id}-${n + 1}.png`)) n++;
+      if (n !== (pa.variantes || 1)) { pa.variantes = n; cambio = true; }
+    }));
+    if (cambio) { pintarAcuario(); if (!$('disenador').hidden) pintarDisenador(); }
+  }
   return { registrado: () => !!datos.acuario, abrirRegistro, mostrarBienvenida, dibujar, anotar: texto => { datos.bitacora.unshift({ id: Date.now(), tipo: 'nota', fecha: Date.now(), detalle: texto }); guardar(); pintarBitacora(); } };
 }
 
@@ -532,9 +649,9 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
  * con giro y volteo, y al final la luz de la lámpara. Lo que falta (marcadores) no se dibuja.
  */
 async function imagenDeVista(vista) {
-  const k = 2, W = vista.clientWidth, H = vista.clientHeight;
+  const W = vista.clientWidth, H = vista.clientHeight, k = Math.min(8, Math.max(2, 2400 / W)); // ~2400 px de ancho aunque la pantalla sea chica
   const c = Object.assign(document.createElement('canvas'), { width: W * k, height: H * k });
-  const ctx = c.getContext('2d'); ctx.scale(k, k);
+  const ctx = c.getContext('2d'); ctx.scale(k, k); ctx.imageSmoothingQuality = 'high';
   let g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#16262C'); g.addColorStop(1, '#0D1A1F');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   const arena = vista.querySelector('.sustrato'), za = +getComputedStyle(arena).zIndex;

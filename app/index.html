@@ -123,7 +123,11 @@
   #di-sel input[type=range], #di-pendiente { accent-color: var(--sol); }
   .vista-superior { width: 100%; display: block; border-radius: 10px; background: #12181D; }
   .vista-superior [data-o] { cursor: pointer; }
-  #di-varios[aria-pressed="true"] { border-color: var(--sol); color: var(--sol); }
+  #di-varios[aria-pressed="true"], #di-fijar[aria-pressed="true"] { border-color: var(--sol); color: var(--sol); }
+  /* Mantener el dedo sobre una planta no abre el menú de copiar/descargar imagen. */
+  .vista-frontal img, .vista-superior { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  .forma { display: inline-flex; align-items: center; gap: 6px; }
+  .forma img { height: 26px; width: 40px; object-fit: contain; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -160,9 +164,9 @@
       <div><h2 style="font-size: 22px">Diseñar acuario</h2><div class="sec num" id="di-medidas"></div></div>
       <button id="di-listo" class="btn prim" type="button" style="flex: 0 0 auto">Listo</button>
     </div>
-    <div id="di-vista" style="touch-action: none"></div>
+    <div id="di-vista"></div>
     <span id="di-faltan" class="sec"></span>
-    <p id="di-ayuda" class="sec" style="margin: 0">Toca una planta, roca o tronco para elegirlo y arrástralo a donde quieras. Más abajo = más al frente. Arriba de una roca o tronco = amarrada encima.</p>
+    <p id="di-ayuda" class="sec" style="margin: 0">Toca una planta, roca o tronco para elegirlo; luego arrástralo. Si hay algo encima, toca otra vez para elegir lo de atrás. Más abajo = más al frente; arriba de una roca o tronco = amarrada encima.</p>
     <div id="di-sel" class="tarjeta pila" style="gap: 10px; padding: 12px 14px" hidden>
       <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
         <b id="di-sel-nombre" style="color: var(--sol)"></b>
@@ -172,6 +176,8 @@
         <input id="di-tamano" type="range" min="40" max="200" step="5" value="100" aria-label="Tamaño"></label>
       <label id="di-copias-fila" class="pila" style="gap: 4px"><span class="sec">Plantas en la mata · <span id="di-copias-v" class="num">3</span></span>
         <input id="di-copias" type="range" min="1" max="8" step="1" value="3" aria-label="Plantas en la mata"></label>
+      <div id="di-tipo-fila" class="pila" style="gap: 4px" hidden><span class="sec">Tipo</span><div id="di-tipos" class="chips envolver"></div></div>
+      <div id="di-forma-fila" class="pila" style="gap: 4px" hidden><span class="sec">Forma</span><div id="di-formas" class="chips envolver"></div></div>
       <label class="pila" style="gap: 4px"><span class="sec">Giro · <span id="di-giro-v" class="num">0°</span></span>
         <input id="di-giro" type="range" min="-45" max="45" step="1" value="0" aria-label="Giro"></label>
       <div class="fila">
@@ -187,6 +193,7 @@
         <button id="di-varios" class="btn" type="button" aria-pressed="false">Elegir varios</button>
         <button id="di-especie" class="btn" type="button">Toda la especie</button>
       </div>
+      <button id="di-fijar" class="btn" type="button" aria-pressed="false">Fijar profundidad</button>
     </div>
     <div class="pila" style="gap: 8px">
       <h2>Agregar</h2>
