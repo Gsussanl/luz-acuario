@@ -120,7 +120,8 @@
     -webkit-mask-image: linear-gradient(#000, transparent 90%); mask-image: linear-gradient(#000, transparent 90%); }
   .vista-frontal .barra-luz { position: absolute; left: 0; right: 0; top: 0; height: 2.5%; z-index: 3001; pointer-events: none; }
   .vista-frontal .vacio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--sec); font-size: 13px; z-index: 3002; pointer-events: none; }
-  #di-sel input[type=range], #di-pendiente, #di-frente-alto { accent-color: var(--sol); }
+  #di-sel input[type=range], #di-pendiente, #di-frente-alto, #di-malla-alto { accent-color: var(--sol); }
+  .vista-superior.editando { touch-action: none; }
   .vista-superior { width: 100%; display: block; border-radius: 10px; background: #12181D; }
   .vista-superior [data-o] { cursor: pointer; }
   #di-varios[aria-pressed="true"], #di-fijar[aria-pressed="true"] { border-color: var(--sol); color: var(--sol); }
@@ -166,7 +167,7 @@
     </div>
     <div id="di-vista"></div>
     <span id="di-faltan" class="sec"></span>
-    <p id="di-ayuda" class="sec" style="margin: 0">Toca una planta, roca o tronco para elegirlo; luego arrástralo. Si hay algo encima, toca otra vez para elegir lo de atrás. Más abajo = más al frente; arriba de una roca o tronco = amarrada encima.</p>
+    <p id="di-ayuda" class="sec" style="margin: 0">Toca una planta, roca o tronco para elegirlo; luego arrástralo. Si hay algo encima, toca otra vez para elegir lo de atrás. Hacia abajo = más al frente; todo queda apoyado en la arena. Suelta un musgo, helecho o Anubias sobre una roca o tronco y queda unido a él.</p>
     <div id="di-sel" class="tarjeta pila" style="gap: 10px; padding: 12px 14px" hidden>
       <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
         <b id="di-sel-nombre" style="color: var(--sol)"></b>
@@ -203,11 +204,13 @@
         <summary><h2>Sustrato</h2></summary>
         <div class="pila" style="gap: 8px; padding-top: 8px">
           <div id="di-sustratos" class="chips envolver" aria-label="Tipo de sustrato"></div>
-          <label class="pila" style="gap: 4px"><span class="sec">Más alto atrás · <span id="di-pendiente-v" class="num">0 cm</span></span>
-            <input id="di-pendiente" type="range" min="0" max="15" step="1" value="0" aria-label="Cuánto más alto está el sustrato atrás"></label>
           <label class="pila" style="gap: 4px"><span class="sec">Altura al frente · <span id="di-frente-alto-v" class="num">3 cm</span></span>
             <input id="di-frente-alto" type="range" min="2" max="8" step="1" value="3" aria-label="Altura del sustrato al frente"></label>
+          <label class="pila" style="gap: 4px"><span class="sec">Más alto atrás · <span id="di-pendiente-v" class="num">0 cm</span></span>
+            <input id="di-pendiente" type="range" min="0" max="15" step="1" value="0" aria-label="Cuánto más alto está el sustrato atrás"></label>
+          <span class="sec">Forma rápida</span>
           <div id="di-perfiles" class="chips envolver"></div>
+          <button id="di-malla-editar" class="btn" type="button">Dar forma a mano (vista de arriba)</button>
         </div>
       </details>
       <details class="plegable">
@@ -222,6 +225,21 @@
     <div class="pila" style="gap: 8px">
       <h2>Vista desde arriba <span class="sec" style="font-weight: 400">· toca una mancha para elegirla</span></h2>
       <div id="di-arriba"></div>
+      <div id="di-malla" class="tarjeta pila" style="gap: 10px; padding: 12px 14px" hidden>
+        <div class="fila" style="align-items: center"><b style="color: var(--sol)">Forma del sustrato</b><button id="di-malla-listo" class="chip" type="button" style="flex: 0 0 auto">Listo</button></div>
+        <span id="di-malla-info" class="sec">Toca o pasa el dedo por los puntos para elegir una zona. Más claro = más alto.</span>
+        <div class="pila" style="gap: 4px"><span class="sec">Pincel</span><div id="di-pincel" class="chips envolver"></div></div>
+        <div class="fila">
+          <button id="di-malla-bajar" class="btn" type="button">Bajar 1 cm</button>
+          <button id="di-malla-subir" class="btn" type="button">Subir 1 cm</button>
+        </div>
+        <label class="pila" style="gap: 4px"><span class="sec">Altura de la zona · <span id="di-malla-alto-v" class="num">–</span></span>
+          <input id="di-malla-alto" type="range" min="2" max="27" step="0.5" value="3" aria-label="Altura de la zona elegida"></label>
+        <div class="fila">
+          <button id="di-malla-suavizar" class="btn" type="button">Suavizar</button>
+          <button id="di-malla-quitar" class="btn" type="button">Quitar selección</button>
+        </div>
+      </div>
     </div>
     <div id="di-avisos" class="nota-aviso" role="note" hidden></div>
     <div class="pila" style="gap: 8px">

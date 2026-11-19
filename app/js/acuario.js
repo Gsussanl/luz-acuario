@@ -1,7 +1,8 @@
 // Módulo del acuario: registro, recomendación y bitácora. No sabe nada de Bluetooth;
 // solo le pasa al módulo de luz "usa esta mezcla" o "usa estas horas" cuando el usuario lo pide.
 import { recomendar, horasDeArranque, avisosDeGrupo } from '../../datos/recomendar.js';
-import { PAISAJE, ARENA, seccionesPara, autocompletar, celdasAObjetos, nuevoId, posicionInicial, numerar, avisosDiseno, vistaFrontal, montados, plantilla, PLANTILLAS, vistaSuperior, listaCompras, esAlfombra, PERFILES, archivoPaisaje, SUSTRATOS, tipoSustrato, sustratoAComprar, granos, TEXTURA_CM } from './diseno.js';
+import { PAISAJE, seccionesPara, autocompletar, celdasAObjetos, nuevoId, posicionInicial, numerar, avisosDiseno, vistaFrontal, plantilla, PLANTILLAS, vistaSuperior, listaCompras, esAlfombra, PERFILES, archivoPaisaje, SUSTRATOS, tipoSustrato, sustratoAComprar, granos, TEXTURA_CM,
+  aV3, mallaDesde, suavizar, apoyo, sobreDesdePunto, dibujarObjeto, soporteDe, bDe, profundidad, planoDe, MALLA, ALTO_MIN, ALTO_AVISO, altoMax, sustratoMasAlto } from './diseno.js';
 
 const CLAVE = 'acuario';
 const TIPOS = { co2: 'Plantado con CO₂', 'sin-co2': 'Plantado sin CO₂', peces: 'Solo peces' };
@@ -149,19 +150,30 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   }
   function automatico() {
     const n = seccionesPara(datos.acuario?.largo || 100);
-    return celdasAObjetos(autocompletar(seleccion().selP, n), n, plantas, datos.acuario?.alto);
+    return celdasAObjetos(autocompletar(seleccion().selP, n), n, plantas, datos.acuario?.alto, datos.acuario?.largo);
   }
-  /** Diseño actual (objetos con posición libre). El diseño viejo por celdas se migra una vez y se guarda una copia. */
+  /**
+   * Diseño actual (objetos con posición libre). Los diseños viejos se convierten una vez y se guarda una copia:
+   * por celdas (diseno_v1) y versión 2 (diseno_v2: otra escala de profundidad y plantas "encima" sin unir).
+   */
   function diseno() {
+    const medidas = { largo: datos.acuario?.largo || 100, alto: datos.acuario?.alto || 45 };
     if (datos.diseno?.celdas) {
       const viejo = datos.diseno;
       datos.diseno_v1 = viejo;
-      datos.diseno = { version: 2, objetos: celdasAObjetos(viejo.celdas, viejo.secciones || seccionesPara(datos.acuario?.largo || 100), plantas, datos.acuario?.alto) };
+      datos.diseno = { version: 3, objetos: celdasAObjetos(viejo.celdas, viejo.secciones || seccionesPara(medidas.largo), plantas, medidas.alto, medidas.largo) };
       guardar();
     }
-    datos.diseno ??= { version: 2, objetos: [] };
-    datos.diseno.sustrato ??= { atras: 6, perfil: 'plano' }; // como se monta un plantado: más alto atrás
-    datos.diseno.sustrato.frente ??= 3; // al frente, mínimo 3 cm
+    datos.diseno ??= { version: 3, objetos: [] };
+    if ((datos.diseno.version || 2) < 3) {
+      datos.diseno_v2 = structuredClone(datos.diseno);
+      datos.diseno.objetos = aV3(datos.diseno.objetos || [], medidas);
+      datos.diseno.version = 3;
+      guardar();
+    }
+    const s = datos.diseno.sustrato ??= { atras: 6, perfil: 'plano' }; // como se monta un plantado: más alto atrás
+    s.frente ??= 3; // al frente, mínimo 3 cm
+    s.malla ??= mallaDesde(s, medidas.alto);
     return datos.diseno;
   }
 
@@ -178,7 +190,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   function abrirDisenador() {
     $('disenador').hidden = false; $('nav').hidden = true;
     document.querySelectorAll('main > section[id^="tab-"]').forEach(s => { s.hidden = true; });
-    elegir(null); varios = false; pintarDisenador(); scrollTo(0, 0);
+    elegir(null); varios = false; editandoMalla = false; puntos = new Set(); pintarDisenador(); scrollTo(0, 0);
   }
   function pintarDisenador() {
     const { objetos } = diseno(), { selP } = seleccion(), numeros = numerar(objetos);
@@ -187,13 +199,10 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     if (!grupo.has(sel)) sel = [...grupo][0] || null;
     $('di-medidas').textContent = `${a.largo} × ${a.alto} cm`;
     dibujar('di-vista', colorVista(), [...grupo]);
-    $('di-arriba').innerHTML = vistaSuperior({ acuario: a, objetos, catalogo: plantas, seleccion: [...grupo] });
-    const s = diseno().sustrato || {};
-    $('di-pendiente').value = s.atras || 0; $('di-pendiente-v').textContent = `${s.atras || 0} cm`;
-    $('di-frente-alto').value = s.frente ?? 3; $('di-frente-alto-v').textContent = `${s.frente ?? 3} cm`;
+    pintarArriba();
+    pintarAtajos(); pintarMalla();
     const tipo = tipoSustrato(a);
     $('di-sustratos').innerHTML = Object.entries(SUSTRATOS).map(([id, x]) => `<button type="button" class="chip planta" data-sustrato="${id}" aria-pressed="${tipo === id}">${x.nombre}</button>`).join('');
-    $('di-perfiles').innerHTML = PERFILES.map(x => `<button type="button" class="chip planta" data-perfil="${x.id}" aria-pressed="${(s.perfil || 'plano') === x.id}">${x.nombre}</button>`).join('');
     pintarBarra();
     pintarPaleta();
 
@@ -207,9 +216,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
       ...compras.hardscape.map(x => `<div><b style="width: 22px">·</b><span style="flex: 1">${escapar(x.nombre)}<br><span class="sec">${x.detalle}</span></span><b class="num">${x.cantidad} ${x.unidad}</b></div>`),
     ].join('') || '<div class="sec">Aún no hay nada en el diseño.</div>';
     pintarSustratoCompra();
-    const avisos = avisosDiseno(objetos, plantas, a.alto);
-    $('di-avisos').innerHTML = avisos.map(x => `<p>${escapar(x)}</p>`).join('');
-    $('di-avisos').hidden = !avisos.length;
+    pintarAvisos();
     // Cuántas imágenes faltan (se sabe cuando el navegador intenta cargarlas).
     setTimeout(() => {
       const faltan = [...new Set([...$('di-vista').querySelectorAll('.falta-img')].map(x => x.textContent).filter(Boolean))];
@@ -266,7 +273,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     $('di-tamano-v').textContent = `${Math.round((o.escala || 1) * 100)} %`;
     const p = plantas.find(z => z.id === o.planta);
     $('di-copias-fila').hidden = !p;
-    if (p) { const n = o.copias || (esAlfombra(p) ? 3 : o.b < 82.5 && o.b >= ARENA[0] ? 4 : 3); $('di-copias').value = n; $('di-copias-v').textContent = n; }
+    if (p) { const n = o.copias || (esAlfombra(p) ? 3 : !o.sobre && planoDe(o.b) === 'fondo' ? 4 : 3); $('di-copias').value = n; $('di-copias-v').textContent = n; }
     $('di-giro').value = o.rot || 0;
     $('di-giro-v').textContent = `${o.rot || 0}°`;
   }
@@ -321,14 +328,21 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   $('di-frente').onclick = () => cambiar(o => { o.orden = (o.orden || 0) + 1; });
   $('di-atras').onclick = () => cambiar(o => { o.orden = (o.orden || 0) - 1; });
   $('di-duplicar').onclick = () => {
-    const copias = elegidos().map(o => ({ ...o, id: nuevoId(), x: Math.min(98, o.x + 8), v: (o.v || 0) + 1 }));
+    const copias = elegidos().map(o => ({ ...o, id: nuevoId(), x: Math.min(98, o.x + 8), v: (o.v || 0) + 1,
+      ...(o.sobre && { sobre: { ...o.sobre, x: o.sobre.x > 30 ? o.sobre.x - 15 : o.sobre.x + 15 } }) }));
     if (!copias.length) return;
     diseno().objetos.push(...copias);
     sel = copias[0].id; grupo = new Set(copias.map(o => o.id)); guardar(); pintarDisenador();
   };
   $('di-borrar').onclick = () => {
     if (!grupo.size) return;
-    diseno().objetos = diseno().objetos.filter(z => !grupo.has(z.id)); elegir(null); guardar(); pintarDisenador();
+    // Las plantas unidas a una roca o tronco que se borra bajan a la arena, donde estaban.
+    const objs = diseno().objetos, ctx = contexto();
+    for (const o of objs) {
+      const r = soporteDe(o, objs);
+      if (r && grupo.has(r.id) && !grupo.has(o.id)) { o.x = apoyo(o, ctx).x; o.b = r.b; delete o.sobre; }
+    }
+    diseno().objetos = objs.filter(z => !grupo.has(z.id)); elegir(null); guardar(); pintarDisenador();
   };
   $('di-soltar').onclick = () => { elegir(null); varios = false; pintarDisenador(); };
   $('di-varios').onclick = () => { varios = !varios; pintarBarra(); avisar(varios ? 'Toca cada cosa que quieras sumar o quitar del grupo. Arrastra una y se mueven todas.' : 'Elegir varios: apagado.'); };
@@ -384,24 +398,60 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
       .filter(el => el.dataset?.o && $('di-vista').contains(el) && (el.tagName !== 'IMG' || opaco(el, x, y)))
       .map(el => el.dataset.o))];
   }
-  /** Lo que se mueve junto: lo elegido y lo que va montado encima de sus rocas o troncos. */
-  const quienesSeMueven = () => {
-    const objs = diseno().objetos;
-    return [...new Set(elegidos().flatMap(o => [o.id, ...(o.paisaje ? montados(objs, o, datos.acuario) : [])]))];
-  };
+  const contexto = () => ({ largo: datos.acuario.largo, alto: datos.acuario.alto, catalogo: plantas, sustrato: diseno().sustrato, objetos: diseno().objetos });
+  /** Lo que se mueve: lo elegido (lo unido a sus rocas o troncos va con ellas solo). */
+  const quienesSeMueven = () => elegidos().map(o => o.id);
   /**
-   * Aplica un desplazamiento (x en %, b en % de la vista). Una planta solo queda "encima" (b bajo la arena)
-   * si cae sobre una roca o tronco; si no, se queda al fondo sobre la arena. "Fijar profundidad" solo deja moverla de lado.
+   * Aplica un desplazamiento: dx en % del largo, dd en profundidad (0 a 1 = de atrás al frente), dy en % del alto (solo
+   * para lo unido a una roca: sube o baja sobre ella). Todo queda en la arena: nada flota. Cerca del vidrio o del fondo,
+   * se pega al borde (imán). "Fijar profundidad" solo deja moverlo de lado.
    */
-  function mover(ids, dx, db) {
-    const objs = diseno().objetos, mov = objs.filter(z => ids.includes(z.id));
-    for (const o of mov) {
+  function mover(ids, { dx = 0, dd = 0, dy = 0 }) {
+    const objs = diseno().objetos, ctx = contexto(), mueven = new Set(ids);
+    for (const o of objs.filter(z => mueven.has(z.id))) {
+      const r = soporteDe(o, objs);
+      if (r) {
+        if (mueven.has(r.id)) continue; // va con su roca o tronco
+        const ap = apoyo(o, ctx), l = sobreDesdePunto(r, ap.x + dx, ap.y + dy, ctx);
+        if (Math.abs(l.x) <= 70 && l.y >= -25 && l.y <= 125) o.sobre = { ...o.sobre, x: Math.round(Math.max(-50, Math.min(50, l.x))), y: Math.round(Math.max(0, Math.min(100, l.y))) };
+        else { delete o.sobre; o.x = Math.min(100, Math.max(0, ap.x + dx)); o.b = bDe(profundidad(r.b) + dd); } // arrastrada lejos: se separa
+        continue;
+      }
       o.x = Math.min(100, Math.max(0, o.x + dx));
-      if (!o.fijo) o.b = Math.min(ARENA[1] + 2, Math.max(15, o.b + db));
+      if (!o.fijo) { let d = profundidad(o.b) + dd; if (d < 0.03) d = 0; if (d > 0.97) d = 1; o.b = bDe(d); }
     }
-    // Después de mover todo (las rocas también): lo que quedó "en el aire" sin roca o tronco debajo vuelve al fondo.
-    for (const o of mov)
-      if (o.planta && o.b < ARENA[0] && !objs.some(pa => pa.paisaje && montados([o], pa, datos.acuario).length)) o.b = ARENA[0] + 1;
+  }
+  /**
+   * Redibuja solo lo que se mueve (y lo unido a ello), cambiando el estilo de sus imágenes: rápido y sin parpadeo.
+   * Si no se puede (cambió cuántas piezas tiene), redibuja toda la vista.
+   */
+  let cuadro = 0;
+  function repintarEnVivo(ids) {
+    cancelAnimationFrame(cuadro);
+    cuadro = requestAnimationFrame(() => {
+      const vista = $('di-vista'), ctx = contexto(), todos = new Set(ids);
+      for (const o of ctx.objetos) if (o.sobre && todos.has(o.sobre.id)) todos.add(o.id);
+      for (const id of todos) {
+        const o = ctx.objetos.find(z => z.id === id); if (!o) continue;
+        const t = document.createElement('template'); t.innerHTML = dibujarObjeto(o, ctx);
+        const nuevos = [...t.content.children], viejos = [...vista.querySelectorAll(`[data-o="${id}"], [data-s="${id}"]`)];
+        if (nuevos.length !== viejos.length) return dibujar('di-vista', colorVista(), [...grupo]);
+        viejos.forEach((el, i) => {
+          const c = el.style.getPropertyValue('--c'); // color del marcador de imagen que falta
+          el.setAttribute('style', nuevos[i].getAttribute('style') + (c ? `;--c:${c}` : ''));
+        });
+      }
+    });
+  }
+  /** Si una epífita se suelta con el dedo sobre una roca o tronco (donde se ve), queda unida en ese punto. */
+  function unirSiCaeEnRoca(id, caja, px, py) {
+    const objs = diseno().objetos, o = objs.find(z => z.id === id), p = plantas.find(z => z.id === o?.planta);
+    if (!p || p.zona !== 'epifita' || o.sobre) return;
+    const el = document.elementsFromPoint(px, py).find(z => z.tagName === 'IMG' && z.dataset.o !== id && objs.find(r => r.id === z.dataset.o)?.paisaje && opaco(z, px, py));
+    const r = el && objs.find(z => z.id === el.dataset.o); if (!r) return;
+    const l = sobreDesdePunto(r, (px - caja.left) / caja.width * 100, (py - caja.top) / caja.height * 100, contexto());
+    o.sobre = { id: r.id, x: Math.round(Math.max(-50, Math.min(50, l.x))), y: Math.round(Math.max(0, Math.min(100, l.y))), z: 0 };
+    avisar(`${p.nombre} quedó unida a ${nombreDe(r)}: se mueve con ella. Arrástrala lejos para separarla.`);
   }
   function elegirConToque(id) {
     if (varios) {
@@ -421,28 +471,39 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     if (!grupo.has(id) || varios) return elegirConToque(id); // primer toque: solo elegir
     sel = id;
     const caja = $('di-vista').querySelector('.vista-frontal').getBoundingClientRect();
-    const ids = quienesSeMueven();
-    arrastre = { ids, x0: e.clientX, y0: e.clientY, caja, movio: false,
-      fijos: new Set(elegidos().filter(o => o.fijo).map(o => o.id)),
-      piezas: ids.map(k => [k, [...$('di-vista').querySelectorAll(`[data-o="${k}"]`)]]) };
+    arrastre = { ids: quienesSeMueven(), x0: e.clientX, y0: e.clientY, caja, movio: false, antes: structuredClone(diseno().objetos) };
     try { $('di-vista').setPointerCapture(e.pointerId); } catch { /* puntero ya liberado */ }
     e.preventDefault();
   });
+  /**
+   * Arrastre en vivo: se recalcula desde el inicio (sin errores acumulados) y se dibuja como quedará: lo que ves es lo que queda.
+   * De lado sigue al dedo; hacia arriba/abajo, todo el alto de la vista equivale a ir del frente al fondo (suave).
+   */
+  const pasoFrente = e => {
+    const r = arrastre, dx = e.clientX - r.x0, dy = e.clientY - r.y0;
+    diseno().objetos = structuredClone(r.antes);
+    mover(r.ids, { dx: dx / r.caja.width * 100, dd: dy / r.caja.height, dy: dy / r.caja.height * 100 });
+  };
   $('di-vista').addEventListener('pointermove', e => {
     if (!arrastre) return;
-    const dx = e.clientX - arrastre.x0, dy = e.clientY - arrastre.y0;
-    if (Math.abs(dx) + Math.abs(dy) > 4) arrastre.movio = true;
-    for (const [k, piezas] of arrastre.piezas) for (const p of piezas) p.style.translate = `${dx}px ${arrastre.fijos.has(k) ? 0 : dy}px`;
+    if (Math.abs(e.clientX - arrastre.x0) + Math.abs(e.clientY - arrastre.y0) > 4) arrastre.movio = true;
+    if (!arrastre.movio) return;
+    pasoFrente(e);
+    repintarEnVivo(arrastre.ids);
   });
   const soltar = e => {
     if (!arrastre) return;
-    const { ids, x0, y0, caja, movio } = arrastre; arrastre = null;
+    const { ids, caja, movio, antes } = arrastre;
     if (!movio) { // tocar otra vez sin arrastrar: elegir lo que está detrás (p. ej. un tronco tapado por su helecho)
+      arrastre = null; diseno().objetos = antes;
       const pila = todosBajoElDedo(e.clientX, e.clientY);
       if (!varios && pila.length > 1) { elegir(pila[(pila.indexOf(sel) + 1) % pila.length]); pintarDisenador(); avisar(`Elegido: ${nombreDe(elegido())}. Toca otra vez para pasar al de atrás.`); }
       return;
     }
-    mover(ids, (e.clientX - x0) / caja.width * 100, (e.clientY - y0) / caja.height * 100);
+    if (e.type === 'pointerup') pasoFrente(e);
+    arrastre = null;
+    cancelAnimationFrame(cuadro);
+    if (ids.length === 1) unirSiCaeEnRoca(ids[0], caja, e.clientX, e.clientY);
     guardar(); pintarDisenador();
   };
   $('di-vista').addEventListener('pointerup', soltar);
@@ -452,6 +513,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   let arrastreArriba = null;
   $('di-arriba').addEventListener('contextmenu', e => e.preventDefault());
   $('di-arriba').addEventListener('pointerdown', e => {
+    if (editandoMalla) return pincelar(e, true);
     const pila = [...new Set(document.elementsFromPoint(e.clientX, e.clientY).map(z => z.closest?.('[data-o]')?.dataset.o).filter(Boolean))];
     if (!pila.length) return;
     const id = !varios && pila.includes(sel) ? sel : pila[0];
@@ -467,16 +529,17 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     const r = arrastreArriba, a = datos.acuario;
     diseno().objetos = structuredClone(r.antes); // se recalcula desde el inicio del arrastre: sin errores acumulados
     const dxCm = (e.clientX - r.x0) * r.cm, dyCm = (e.clientY - r.y0) * r.cm;
-    const elevados = new Set(diseno().objetos.filter(o => r.ids.includes(o.id) && o.planta && o.b < ARENA[0]).map(o => o.id));
-    mover(r.ids.filter(id => !elevados.has(id)), dxCm / a.largo * 100, dyCm / a.ancho * (ARENA[1] - ARENA[0]));
-    mover([...elevados], dxCm / a.largo * 100, 0); // lo montado sigue a su soporte de lado; su altura no cambia
+    mover(r.ids, { dx: dxCm / a.largo * 100, dd: dyCm / a.ancho }); // lo unido a una roca solo se corre a lo largo de ella
   };
   $('di-arriba').addEventListener('pointermove', e => {
+    if (editandoMalla) return pincelar(e, false);
     if (!arrastreArriba) return;
     pasoArriba(e);
-    $('di-arriba').innerHTML = vistaSuperior({ acuario: datos.acuario, objetos: diseno().objetos, catalogo: plantas, seleccion: [...grupo] });
+    pintarArriba();
+    repintarEnVivo(arrastreArriba.ids);
   });
   const soltarArriba = e => {
+    pincel.activo = false;
     if (!arrastreArriba) return;
     const { x0, y0, pila } = arrastreArriba;
     if (Math.abs(e.clientX - x0) + Math.abs(e.clientY - y0) <= 4) { // tocar otra vez sin arrastrar: el de abajo
@@ -490,6 +553,102 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   $('di-arriba').addEventListener('pointerup', soltarArriba);
   $('di-arriba').addEventListener('pointercancel', soltarArriba);
 
+  function pintarAvisos() {
+    const a = datos.acuario, avisos = avisosDiseno(diseno().objetos, plantas, a.alto);
+    if (sustratoMasAlto(diseno().sustrato) > ALTO_AVISO)
+      avisos.push(`El sustrato pasa de ${ALTO_AVISO} cm en una zona: ${tipoSustrato(a) === 'aquasoil' ? 'el aquasoil muy alto' : 'la arena muy alta'} se compacta; usa rocas o bolsas de malla para sostenerlo.`);
+    $('di-avisos').innerHTML = avisos.map(x => `<p>${escapar(x)}</p>`).join('');
+    $('di-avisos').hidden = !avisos.length;
+  }
+  // ---------- Forma del sustrato ----------
+  function pintarArriba() {
+    $('di-arriba').innerHTML = vistaSuperior({ acuario: datos.acuario, objetos: diseno().objetos, catalogo: plantas, seleccion: [...grupo],
+      sustrato: diseno().sustrato, malla: editandoMalla ? { elegidos: [...puntos] } : null });
+  }
+  /** Controles de atajo: altura al frente, cuánto más alto atrás (con la altura total) y la forma. */
+  function pintarAtajos() {
+    const s = diseno().sustrato, frente = s.frente ?? 3, atras = s.perfil === 'parejo' ? 0 : s.atras || 0;
+    $('di-frente-alto').value = frente; $('di-frente-alto-v').textContent = `${frente} cm`;
+    $('di-pendiente').value = atras;
+    $('di-pendiente-v').textContent = atras ? `atrás ${frente + atras} cm (${frente} al frente + ${atras})` : '0 cm (parejo)';
+    $('di-perfiles').innerHTML = PERFILES.map(x => `<button type="button" class="chip planta" data-perfil="${x.id}" aria-pressed="${!s.malla?.editada && (s.perfil || 'plano') === x.id}">${x.nombre}</button>`).join('');
+  }
+  /** Rehace la malla desde los atajos. Si se le dio forma a mano, pregunta antes de reemplazarla. */
+  function aplicarAtajo(cambios) {
+    const s = diseno().sustrato;
+    if (s.malla?.editada && !confirm('¿Reemplazar la forma que le diste a mano al sustrato?')) { pintarAtajos(); return false; }
+    Object.assign(s, cambios);
+    s.malla = mallaDesde(s, datos.acuario.alto);
+    return true;
+  }
+  /** Cambio en la malla: redibuja frente, arriba y la compra. */
+  function mallaCambio(guardarYa = true) {
+    dibujar('di-vista', colorVista(), [...grupo]); pintarArriba(); pintarSustratoCompra(); pintarMalla(); pintarAtajos(); pintarAvisos();
+    if (guardarYa) guardar();
+  }
+  let editandoMalla = false, puntos = new Set(), tamPincel = 1;
+  const PINCELES = [['Chico', 0], ['Mediano', 1], ['Grande', 2]];
+  const pincel = { activo: false };
+  function pintarMalla() {
+    $('di-malla').hidden = !editandoMalla;
+    $('di-malla-editar').textContent = editandoMalla ? 'Dando forma: usa la vista de arriba' : 'Dar forma a mano (vista de arriba)';
+    if (!editandoMalla) return;
+    $('di-pincel').innerHTML = PINCELES.map(([n, r]) => `<button type="button" class="chip planta" data-pincel="${r}" aria-pressed="${tamPincel === r}">${n}</button>`).join('');
+    const m = diseno().sustrato.malla, alts = [...puntos].map(i => m.cm[i]);
+    const max = altoMax(datos.acuario.alto);
+    $('di-malla-alto').max = max;
+    for (const id of ['di-malla-bajar', 'di-malla-subir', 'di-malla-alto', 'di-malla-quitar']) $(id).disabled = !puntos.size;
+    if (alts.length) {
+      const prom = alts.reduce((a, b) => a + b, 0) / alts.length, lo = Math.min(...alts), hi = Math.max(...alts);
+      $('di-malla-alto').value = prom;
+      $('di-malla-alto-v').textContent = lo === hi ? `${lo} cm` : `${Math.round(lo)}–${Math.round(hi)} cm`;
+      $('di-malla-info').textContent = `${puntos.size} punto${puntos.size > 1 ? 's' : ''} elegido${puntos.size > 1 ? 's' : ''}. Mínimo ${ALTO_MIN} cm, máximo ${max} cm.`;
+    } else {
+      $('di-malla-alto-v').textContent = '–';
+      $('di-malla-info').textContent = 'Toca o pasa el dedo por los puntos para elegir una zona. Más claro = más alto.';
+    }
+  }
+  /** Elige los puntos de la malla bajo el dedo (con el tamaño de pincel). */
+  function pincelar(e, inicio) {
+    if (inicio) { pincel.activo = true; try { $('di-arriba').setPointerCapture(e.pointerId); } catch { /* */ } e.preventDefault(); }
+    if (!pincel.activo) return;
+    const svg = $('di-arriba').querySelector('svg'), caja = svg.getBoundingClientRect(), a = datos.acuario;
+    const k = (a.largo + 4) / caja.width, x = (e.clientX - caja.left) * k - 2, y = (e.clientY - caja.top) * k - 2;
+    const { cols, filas } = MALLA, paso = Math.max(a.largo / (cols - 1), a.ancho / (filas - 1));
+    const radio = [0.55, 1.1, 1.9][tamPincel] * paso;
+    const antes = puntos.size;
+    for (let i = 0; i < cols * filas; i++) {
+      const px = (i % cols) / (cols - 1) * a.largo, py = Math.floor(i / cols) / (filas - 1) * a.ancho;
+      if (Math.hypot(px - x, py - y) <= radio) puntos.add(i);
+    }
+    if (puntos.size !== antes) { pintarArriba(); pintarMalla(); }
+  }
+  const cambiarZona = fn => {
+    if (!puntos.size) return;
+    const s = diseno().sustrato, max = altoMax(datos.acuario.alto), cm = [...s.malla.cm];
+    for (const i of puntos) cm[i] = Math.round(Math.max(ALTO_MIN, Math.min(max, fn(cm[i]))) * 10) / 10;
+    s.malla = { ...s.malla, cm, editada: true };
+    mallaCambio();
+  };
+  $('di-malla-editar').onclick = () => {
+    editandoMalla = !editandoMalla; puntos = new Set();
+    if (editandoMalla) { elegir(null); pintarDisenador(); $('di-arriba').scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+    else pintarDisenador();
+  };
+  $('di-malla-listo').onclick = () => { editandoMalla = false; puntos = new Set(); pintarDisenador(); };
+  $('di-pincel').addEventListener('click', e => { const b = e.target.closest('[data-pincel]'); if (b) { tamPincel = +b.dataset.pincel; pintarMalla(); } });
+  $('di-malla-subir').onclick = () => cambiarZona(v => v + 1);
+  $('di-malla-bajar').onclick = () => cambiarZona(v => v - 1);
+  $('di-malla-alto').oninput = e => { const v = +e.target.value; const s = diseno().sustrato; s.malla = { ...s.malla, cm: s.malla.cm.map((x, i) => puntos.has(i) ? v : x), editada: true }; mallaCambio(false); };
+  $('di-malla-alto').onchange = () => guardar();
+  $('di-malla-suavizar').onclick = () => {
+    const s = diseno().sustrato;
+    s.malla = { ...suavizar(s.malla, [...puntos]), editada: true };
+    mallaCambio();
+    avisar(puntos.size ? 'Zona suavizada.' : 'Todo el sustrato suavizado.');
+  };
+  $('di-malla-quitar').onclick = () => { puntos = new Set(); pintarArriba(); pintarMalla(); };
+
   /** Línea del sustrato en la lista de compras (se actualiza al mover la pendiente). */
   function pintarSustratoCompra() {
     const c = sustratoAComprar(datos.acuario, diseno().sustrato);
@@ -500,25 +659,23 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     datos.acuario.sustrato = b.dataset.sustrato;
     guardar(); pintarDisenador();
   });
-  // Sustrato: más alto atrás (cm) y forma a lo largo; las plantas y rocas se apoyan en la nueva altura.
+  // Atajos del sustrato: rehacen la malla. Las plantas y rocas se apoyan en la nueva altura.
   $('di-pendiente').oninput = e => {
-    diseno().sustrato = { ...diseno().sustrato, atras: +e.target.value };
-    $('di-pendiente-v').textContent = `${e.target.value} cm`;
-    dibujar('di-vista', colorVista(), [...grupo]);
-    pintarSustratoCompra();
+    const s = diseno().sustrato, atras = +e.target.value;
+    if (!aplicarAtajo({ atras, perfil: atras && s.perfil === 'parejo' ? 'plano' : !atras ? 'parejo' : s.perfil })) return;
+    mallaCambio(false);
   };
   $('di-pendiente').onchange = () => { guardar(); pintarDisenador(); };
   $('di-frente-alto').oninput = e => {
-    diseno().sustrato = { ...diseno().sustrato, frente: +e.target.value };
-    $('di-frente-alto-v').textContent = `${e.target.value} cm`;
-    dibujar('di-vista', colorVista(), [...grupo]);
-    pintarSustratoCompra();
+    if (!aplicarAtajo({ frente: +e.target.value })) return;
+    mallaCambio(false);
   };
   $('di-frente-alto').onchange = () => { guardar(); pintarDisenador(); };
   $('di-perfiles').addEventListener('click', e => {
     const b = e.target.closest('[data-perfil]'); if (!b) return;
-    const s = diseno().sustrato || {};
-    diseno().sustrato = { ...s, perfil: b.dataset.perfil, atras: s.atras || 6 }; // si estaba parejo, darle una pendiente visible
+    const s = diseno().sustrato, perfil = b.dataset.perfil;
+    // Si estaba parejo, darle una forma visible.
+    if (!aplicarAtajo({ perfil, atras: perfil === 'parejo' ? s.atras : s.atras || 6 })) return;
     guardar(); pintarDisenador();
   });
   $('di-plantillas').innerHTML = PLANTILLAS.map(x =>

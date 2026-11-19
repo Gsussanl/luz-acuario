@@ -1,10 +1,12 @@
 // Diseñador del acuario: vista frontal armada con imágenes PNG (app/img/plantas/<id>.png, app/img/paisaje/<id>.png;
 // nombres en PROMPTS-IMAGENES.md). Cada planta, roca o tronco es un objeto con posición libre.
 //
-// Modelo (versión 2): { version: 2, objetos: [{ id, planta | paisaje, x, b, escala, espejo, v }] }
-//   x = centro horizontal (% del largo), b = dónde apoya su base (% desde arriba de la vista).
-//   b entre 78 y 95 = sobre la arena (más abajo = más adelante y un poco más chico); menos de 78 = encima de una roca o tronco.
-// El modelo anterior por celdas ({ secciones, celdas }) se sigue usando para autocompletar y se migra con celdasAObjetos.
+// Modelo (versión 3): { version: 3, objetos: [{ id, planta | paisaje, x, b, escala, espejo, v, sobre? }], sustrato }
+//   x = centro horizontal (% del largo).
+//   b = profundidad, como la altura del piso del acuario en la vista: ARENA[0] = vidrio de atrás, ARENA[1] = vidrio del frente.
+//   Todo se apoya en la arena: en pantalla su base queda a la altura real del sustrato en ese punto (alturaSustrato).
+//   sobre = { id, x, y, z }: planta unida a una roca o tronco (x: −50 a 50 % de su ancho; y: 0 base a 100 punta; z: −1 detrás, 0 encima, 1 delante).
+// Versión 2 (b de 78 a 95 y "encima" si b < 78) se convierte con aV3. El modelo por celdas se migra con celdasAObjetos.
 
 export const PLANOS = ['fondo', 'medio', 'frente'];
 export const PAISAJE = [
@@ -23,19 +25,26 @@ export const archivoPaisaje = (pa, v = 0) => {
   const n = v % (pa.variantes || 1);
   return `img/paisaje/${pa.id}${n ? `-${n + 1}` : ''}.png`;
 };
-// Dónde apoya cada plano en la vista frontal (% desde arriba).
-export const BASE = { fondo: 80, medio: 85, frente: 91 };
-export const ARENA = [78, 95]; // franja de la arena: de ahí para abajo es "sobre el sustrato"
+// Profundidad: el piso del acuario se ve en 94 % de la vista al fondo y en 100 % al frente (perspectiva chica).
+export const ARENA = [94, 100];
+const limitar = (v, min, max) => Math.min(max, Math.max(min, v));
+/** Profundidad 0 (atrás) a 1 (frente) desde b, y al revés. */
+export const profundidad = b => limitar((b - ARENA[0]) / (ARENA[1] - ARENA[0]), 0, 1);
+export const bDe = d => ARENA[0] + limitar(d, 0, 1) * (ARENA[1] - ARENA[0]);
+// Dónde apoya cada plano (profundidad 0.12, 0.41, 0.76).
+export const BASE = { fondo: bDe(0.12), medio: bDe(0.41), frente: bDe(0.76) };
+// Modelo anterior (versión 2): solo para convertir diseños guardados y armar plantillas.
+const V2 = { ARENA: [78, 95], BASE: { fondo: 80, medio: 85, frente: 91 } };
+const perspectivaV2 = b => 1 - 0.15 * limitar((b - 78) / 15, 0, 1);
 
 export const seccionesPara = largo => Math.min(6, Math.max(3, Math.round(largo / 20)));
 export const clave = (plano, i) => `${plano}-${i}`;
 const escapar = s => String(s).replace(/[&<>"']/g, ch => `&#${ch.charCodeAt(0)};`);
-const limitar = (v, min, max) => Math.min(max, Math.max(min, v));
 export const esAlfombra = p => p.zona === 'primer' || p.zona === 'flotante';
-/** Plano según la altura de la base: sirve para avisos, autocompletar y el ancho de las copias. */
-export const planoDe = b => b < ARENA[0] ? 'medio' : b < 82.5 ? 'fondo' : b < 88 ? 'medio' : 'frente';
+/** Plano según la profundidad: sirve para avisos, autocompletar y el ancho de las copias. */
+export const planoDe = b => { const d = profundidad(b); return d < 0.265 ? 'fondo' : d < 0.59 ? 'medio' : 'frente'; };
 /** Perspectiva: lo de adelante se ve un poco más chico (1 al fondo, 0.85 al frente). */
-const perspectiva = b => 1 - 0.15 * limitar((b - ARENA[0]) / (ARENA[1] - ARENA[0] - 2), 0, 1);
+const perspectiva = b => 1 - 0.15 * limitar(profundidad(b) * 17 / 15, 0, 1);
 
 /** Llena la cuadrícula según la zona de cada planta: tallos atrás, arbustos al medio, alfombras al frente, epífitas en un tronco. */
 export function autocompletar(plantas, secciones) {
@@ -61,25 +70,59 @@ let contador = 0;
 export const nuevoId = () => `o${Date.now().toString(36)}${(contador++).toString(36)}`;
 
 /** Migra el diseño por celdas a objetos libres, en el mismo lugar donde se veían. */
-export function celdasAObjetos(celdas, secciones, catalogo, alto = 45) {
-  const objetos = [];
+export function celdasAObjetos(celdas, secciones, catalogo, alto = 45, largo = 100) {
+  const objetos = []; // se arma en unidades de la versión 2 y se convierte al final
   for (const plano of PLANOS) for (let i = 0; i < secciones; i++) {
     const c = celdas[clave(plano, i)]; if (!c) continue;
     const r = azar(`${plano}-${i}`);
-    const x = (i + 0.5) * 100 / secciones + (r() - 0.5) * 3, b = BASE[plano];
+    const x = (i + 0.5) * 100 / secciones + (r() - 0.5) * 3, b = V2.BASE[plano];
     const pa = PAISAJE.find(z => z.id === c.paisaje);
     if (pa) objetos.push({ id: nuevoId(), paisaje: pa.id, x, b, escala: 1, espejo: false, v: i + PLANOS.indexOf(plano) });
     const p = catalogo.find(z => z.id === c.planta); if (!p) continue;
     // Epífita sobre roca o tronco: su base sube (queda encima); una alfombra queda delante de la base de la roca.
-    const sobre = pa && !esAlfombra(p) ? pa.alto / alto * 100 * perspectiva(b) * 0.6 : 0;
+    const sobre = pa && !esAlfombra(p) ? pa.alto / alto * 100 * perspectivaV2(b) * 0.6 : 0;
     objetos.push({ id: nuevoId(), planta: p.id, x, b: b - sobre + (pa && esAlfombra(p) ? 0.5 : 0), escala: 1, espejo: false });
   }
-  return objetos;
+  return aV3(objetos, { largo, alto });
 }
 
-/** Diseño como objetos, venga del modelo nuevo o del de celdas. */
-export const objetosDe = (diseno, catalogo, alto) =>
-  diseno?.objetos || (diseno?.celdas ? celdasAObjetos(diseno.celdas, diseno.secciones || 5, catalogo, alto) : []);
+/** ¿La base de la planta (versión 2) cae dentro de la roca o tronco? Así se detectaba lo "montado" antes. */
+function montadoV2(o, base, largo, alto) {
+  const pa = PAISAJE.find(x => x.id === base.paisaje); if (!pa) return false;
+  const w = 2000 / largo * pa.ancho * (base.escala || 1);
+  const h = Math.min(80, pa.alto / alto * 100 * perspectivaV2(base.b) * (base.escala || 1));
+  return o.planta && o.b < V2.ARENA[0] && Math.abs(o.x - base.x) <= w / 2 && o.b <= base.b && o.b >= base.b - h;
+}
+/**
+ * Convierte objetos de la versión 2 a la 3: la misma profundidad relativa en la arena nueva, y las plantas que estaban
+ * encima de una roca o tronco pasan a estar unidas a él (sobre) en el mismo punto. Lo que flotaba en el agua baja a la arena.
+ */
+export function aV3(objetos, { largo = 100, alto = 45 } = {}) {
+  const rocas = objetos.filter(o => o.paisaje);
+  return objetos.map(o => {
+    if (o.sobre) return { ...o };
+    const n = { ...o, b: bDe((o.b - V2.ARENA[0]) / (V2.ARENA[1] - V2.ARENA[0])) };
+    if (!o.planta || o.b >= V2.ARENA[0]) return n;
+    const soportes = rocas.filter(r => montadoV2(o, r, largo, alto)).sort((a, b) => (a.b - o.b) - (b.b - o.b));
+    const r = soportes[0]; if (!r) return { ...n, b: bDe(0.06) };
+    const pa = PAISAJE.find(x => x.id === r.paisaje), esc = r.escala || 1;
+    const wCm = 20 * pa.ancho * esc, hCm = Math.min(80, pa.alto / alto * 100 * perspectivaV2(r.b) * esc) / 100 * alto;
+    // Desde la base de la roca, en cm (y hacia abajo), deshaciendo su giro y su volteo.
+    const dx = (o.x - r.x) / 100 * largo, dy = (o.b - r.b) / 100 * alto, a = -(r.rot || 0) * Math.PI / 180;
+    let lx = dx * Math.cos(a) - dy * Math.sin(a); const ly = dx * Math.sin(a) + dy * Math.cos(a);
+    if (r.espejo) lx = -lx;
+    return { ...n, b: bDe((r.b - V2.ARENA[0]) / (V2.ARENA[1] - V2.ARENA[0])), sobre: { id: r.id, x: Math.round(limitar(lx / wCm * 100, -50, 50)), y: Math.round(limitar(-ly / hCm * 100, 0, 100)), z: 0 } };
+  });
+}
+
+/** Diseño como objetos, venga del modelo nuevo, de la versión 2 o del de celdas. */
+export const objetosDe = (diseno, catalogo, alto, largo = 100) =>
+  diseno?.objetos ? (diseno.version >= 3 ? diseno.objetos : aV3(diseno.objetos, { largo, alto }))
+    : diseno?.celdas ? celdasAObjetos(diseno.celdas, diseno.secciones || 5, catalogo, alto, largo) : [];
+/** Roca o tronco al que está unida una planta (si existe). */
+export const soporteDe = (o, objetos) => o?.sobre ? objetos.find(z => z.id === o.sobre.id && z.paisaje) : null;
+/** Profundidad (b) con la que cuenta un objeto: la de su roca si está unido. */
+export const bEfectiva = (o, objetos) => soporteDe(o, objetos)?.b ?? o.b;
 
 /** Dónde aparece algo nuevo: en su plano natural, en el centro. */
 export function posicionInicial(item, catalogo) {
@@ -91,7 +134,7 @@ export function posicionInicial(item, catalogo) {
 /** Número de cada especie de atrás hacia adelante (para la leyenda). */
 export function numerar(objetos) {
   const orden = [];
-  const prof = o => o.b < ARENA[0] ? BASE.medio : o.b; // lo que está encima de una roca cuenta como del medio
+  const prof = o => bEfectiva(o, objetos); // lo unido a una roca cuenta con la profundidad de la roca
   for (const o of [...objetos].sort((a, b) => prof(a) - prof(b) || a.x - b.x)) if (o.planta && !orden.includes(o.planta)) orden.push(o.planta);
   return Object.fromEntries(orden.map((id, i) => [id, i + 1]));
 }
@@ -101,10 +144,10 @@ export function avisosDiseno(objetos, catalogo, alto) {
   const avisos = new Set();
   for (const o of objetos) {
     const p = catalogo.find(x => x.id === o.planta); if (!p) continue;
-    const plano = planoDe(o.b);
+    const plano = o.sobre ? 'medio' : planoDe(o.b);
     if (plano === 'frente' && p.altura[1] > alto * 0.35) avisos.add(`${p.nombre} crece hasta ${p.altura[1]} cm: al frente va a tapar lo de atrás.`);
     if (plano === 'fondo' && p.altura[1] <= 5) avisos.add(`${p.nombre} es muy baja para el fondo: no se va a ver.`);
-    if (p.zona === 'epifita' && o.b >= ARENA[0]) avisos.add(`${p.nombre} se amarra a roca o tronco: súbela encima de uno.`);
+    if (p.zona === 'epifita' && !soporteDe(o, objetos)) avisos.add(`${p.nombre} se amarra a roca o tronco: súbela encima de uno.`);
   }
   return [...avisos];
 }
@@ -151,38 +194,67 @@ function imagen(ruta, nombre, color, estilo, id) {
     onerror="const d=document.createElement('div');d.className='falta-img';d.textContent=this.dataset.nombre;d.setAttribute('style',this.getAttribute('style')+';--c:'+this.dataset.color);d.dataset.o=this.dataset.o;this.replaceWith(d)">`;
 }
 
-/** Orden de dibujo: lo de más abajo va delante; lo que está encima de rocas y troncos, delante de todo lo de atrás. */
-// A la misma profundidad: plantas detrás, rocas y troncos delante, alfombras delante de la base de la roca.
-const capa = (b, extra = 0) => (b < ARENA[0] ? 1000 + Math.round(b * 10) : Math.round(b * 10)) + extra;
+/** Orden de dibujo: lo de más adelante va delante. A la misma profundidad: plantas detrás, rocas y troncos delante, alfombras delante de la base de la roca. */
+const capa = (b, extra = 0) => Math.max(3, 10 + Math.round(profundidad(b) * 1000) + extra);
 
 /** Giro y volteo como CSS: el giro es alrededor de la base (la planta o el tronco "pivotean" en la arena). */
 const giro = (rot, espejo) => (rot ? `;rotate:${rot}deg;transform-origin:50% 100%` : '') + (espejo ? ';transform:scaleX(-1)' : '');
-/** Sombra suave en la base: integra lo que está sobre la arena (lo montado en rocas no lleva). */
-const sombra = (x, w, b, z, sube = 0) => b < ARENA[0] ? '' :
-  `<div class="sombra" style="left:${x - w / 2}%;width:${w}%;bottom:${100 - b - 1.4 + sube}%;height:3%;z-index:${z - 1}"></div>`;
+/** Sombra suave en la base (y = dónde apoya, % desde arriba): integra lo que está sobre la arena. */
+const sombra = (x, w, y, z, id) =>
+  `<div class="sombra" data-s="${id}" style="left:${x - w / 2}%;width:${w}%;bottom:${100 - y - 1.4}%;height:3%;z-index:${z - 1}"></div>`;
 
-// ---------- Sustrato con pendiente ----------
+// ---------- Forma del sustrato: malla de alturas en cm ----------
+/** Atajos que llenan la malla. "plano" es la pendiente pareja de atrás hacia adelante (id de los diseños guardados). */
 export const PERFILES = [
-  { id: 'plano', nombre: 'Parejo' },
+  { id: 'parejo', nombre: 'Parejo' },
+  { id: 'plano', nombre: 'Pendiente' },
   { id: 'izquierda', nombre: 'Sube a la izquierda' },
   { id: 'derecha', nombre: 'Sube a la derecha' },
   { id: 'centro', nombre: 'Montículo al centro' },
+  { id: 'valle', nombre: 'Valle al centro' },
 ];
 /** Cuánto más alto está el sustrato en x según el perfil (1 = la altura elegida). */
 const perfil = (id, x) => id === 'izquierda' ? 1.6 - 1.2 * x / 100 : id === 'derecha' ? 0.4 + 1.2 * x / 100
-  : id === 'centro' ? 0.3 + 1.1 * (1 - Math.abs(x - 50) / 50) : 1;
-/**
- * Cuánto sube la arena (en % del alto de la vista) en x a la profundidad b: lo de atrás sube "atras" cm,
- * el frente queda pegado al vidrio (no sube). Lo montado en rocas no se toca (ya va sobre su soporte).
- */
-export function elevacion(sustrato, x, b, alto = 45) {
-  if (!sustrato?.atras || b < ARENA[0]) return 0;
-  const prof = limitar((b - ARENA[0]) / (ARENA[1] - ARENA[0]), 0, 1);
-  return sustrato.atras / alto * 100 * perfil(sustrato.perfil, x) * (1 - prof);
+  : id === 'centro' ? 0.3 + 1.1 * (1 - Math.abs(x - 50) / 50) : id === 'valle' ? 0.3 + 1.1 * Math.abs(x - 50) / 50
+  : id === 'parejo' ? 0 : 1;
+/** Malla: 12 puntos a lo largo × 6 de fondo (fila 0 = atrás). Mínimo 2 cm; máximo 60 % del alto del acuario. */
+export const MALLA = { cols: 12, filas: 6 };
+export const ALTO_MIN = 2;
+export const altoMax = (alto = 45) => Math.round(alto * 0.6);
+export const ALTO_AVISO = 15; // más alto que esto se compacta
+const redondear1 = v => Math.round(v * 10) / 10;
+/** Llena la malla desde un atajo: altura al frente, cuánto más alto atrás y forma a lo largo. */
+export function mallaDesde({ frente = 3, atras = 0, perfil: id = 'plano' } = {}, alto = 45) {
+  const { cols, filas } = MALLA, cm = [];
+  for (let f = 0; f < filas; f++) for (let c = 0; c < cols; c++)
+    cm.push(redondear1(limitar(frente + atras * perfil(id, c / (cols - 1) * 100) * (1 - f / (filas - 1)), ALTO_MIN, altoMax(alto))));
+  return { cols, filas, cm };
 }
-/** Borde de arriba de la arena (lo que se ve al fondo), como puntos [x, y] en % de la vista. */
+/** Suaviza la malla (promedio con los vecinos) en los puntos dados (todos si no se dan): sin escalones. */
+export function suavizar(malla, puntos) {
+  const { cols, filas, cm } = malla, nuevo = [...cm];
+  for (const i of puntos?.length ? puntos : cm.map((_, k) => k)) {
+    const f = Math.floor(i / cols), c = i % cols; let s = 0, n = 0;
+    for (let df = -1; df <= 1; df++) for (let dc = -1; dc <= 1; dc++) {
+      const ff = f + df, cc = c + dc; if (ff < 0 || ff >= filas || cc < 0 || cc >= cols) continue;
+      const peso = df || dc ? 1 : 2; s += cm[ff * cols + cc] * peso; n += peso;
+    }
+    nuevo[i] = redondear1(s / n);
+  }
+  return { ...malla, cm: nuevo };
+}
+/** Lo más alto del sustrato (cm). */
+export const sustratoMasAlto = s => s?.malla ? Math.max(...s.malla.cm)
+  : Math.max(...Array.from({ length: 21 }, (_, i) => alturaSustrato(s, i * 5, 0)));
+/** Altura en pantalla (% desde arriba) donde apoya algo que está en x a la profundidad b: la superficie real de la arena. */
+export const yArena = (sustrato, x, b, alto = 45) => b - alturaSustrato(sustrato, x, profundidad(b)) / alto * 100;
+/** Borde de arriba de la arena vista de frente (lo más alto en cada x), como puntos [x, y] en % de la vista. */
 export function bordeSustrato(sustrato, alto = 45) {
-  return Array.from({ length: 21 }, (_, i) => [i * 5, ARENA[0] + 0.5 - elevacion(sustrato, i * 5, ARENA[0], alto)]);
+  return Array.from({ length: 41 }, (_, i) => {
+    const x = i * 2.5; let y = 100;
+    for (let k = 0; k <= 20; k++) y = Math.min(y, yArena(sustrato, x, bDe(k / 20), alto));
+    return [x, Math.round(Math.max(2, y) * 100) / 100];
+  });
 }
 
 // ---------- Tipo de sustrato: color en el dibujo y cuánto comprar ----------
@@ -224,7 +296,15 @@ export function fondoArena(tipo, tope = 78, alto = 45) {
 }
 
 /** Altura del sustrato en cm en x (0–100 % del largo) y profundidad d (0 = atrás, 1 = vidrio del frente). */
+// Con malla: interpolación entre sus 4 puntos vecinos. Sin malla (diseños viejos, pruebas): frente + pendiente según el perfil.
 export function alturaSustrato(sustrato, x, d) {
+  const m = sustrato?.malla;
+  if (m && m.cm?.length === m.cols * m.filas) {
+    const u = limitar(x, 0, 100) / 100 * (m.cols - 1), v = limitar(d, 0, 1) * (m.filas - 1);
+    const c0 = Math.min(m.cols - 2, Math.floor(u)), f0 = Math.min(m.filas - 2, Math.floor(v)), tu = u - c0, tv = v - f0;
+    const h = (f, c) => m.cm[f * m.cols + c];
+    return (h(f0, c0) * (1 - tu) + h(f0, c0 + 1) * tu) * (1 - tv) + (h(f0 + 1, c0) * (1 - tu) + h(f0 + 1, c0 + 1) * tu) * tv;
+  }
   const frente = sustrato?.frente ?? 3;
   return frente + (sustrato?.atras || 0) * perfil(sustrato?.perfil, x) * (1 - d);
 }
@@ -259,19 +339,50 @@ export function sustratoAComprar(acuario, sustrato) {
     texto: `Sustrato · ${t.nombre}: ${cantidad} → ${bolsas} (${alturas})` };
 }
 
-/** HTML de un objeto (una roca, o varias copias de una planta). */
-function dibujarObjeto(o, { largo, alto, catalogo, sustrato }) {
+/**
+ * Dónde va la base de un objeto en la vista: x e y (% de la vista), escala por perspectiva y capa.
+ * Sobre la arena: apoyado en la altura real del sustrato en su punto. Unido a una roca o tronco: pegado a ella,
+ * siguiendo su posición, giro, volteo y tamaño.
+ */
+export function apoyo(o, ctx) {
+  const { largo = 100, alto = 45, sustrato, objetos = [] } = ctx;
+  const r = soporteDe(o, objetos);
+  if (!r) return { x: o.x, y: yArena(sustrato, o.x, o.b, alto), esc: perspectiva(o.b), z: capa(o.b), unido: false };
+  const pa = PAISAJE.find(z => z.id === r.paisaje), base = apoyo(r, ctx), e = r.escala || 1;
+  const wCm = 20 * pa.ancho * e, hCm = Math.min(80, pa.alto / alto * 100 * base.esc * e) / 100 * alto;
+  let lx = o.sobre.x / 100 * wCm; const ly = -o.sobre.y / 100 * hCm;
+  if (r.espejo) lx = -lx;
+  const a = (r.rot || 0) * Math.PI / 180;
+  const dx = lx * Math.cos(a) - ly * Math.sin(a), dy = lx * Math.sin(a) + ly * Math.cos(a);
+  const zRoca = base.z + 1 + (r.orden || 0) * 30;
+  return { x: r.x + dx / largo * 100, y: base.y + dy / alto * 100, esc: base.esc, z: zRoca + ((o.sobre.z || 0) < 0 ? -2 : 2 + Math.max(0, o.sobre.z || 0)), unido: true };
+}
+
+/** Al revés que apoyo: un punto de la vista (x, y en %) en coordenadas de la roca (x: −50 a 50 % del ancho, y: 0 base a 100 punta). */
+export function sobreDesdePunto(r, px, py, ctx) {
+  const { largo = 100, alto = 45 } = ctx;
+  const pa = PAISAJE.find(z => z.id === r.paisaje), base = apoyo(r, ctx), e = r.escala || 1;
+  const wCm = 20 * pa.ancho * e, hCm = Math.min(80, pa.alto / alto * 100 * base.esc * e) / 100 * alto;
+  const dx = (px - base.x) / 100 * largo, dy = (py - base.y) / 100 * alto, a = -(r.rot || 0) * Math.PI / 180;
+  let lx = dx * Math.cos(a) - dy * Math.sin(a); const ly = dx * Math.sin(a) + dy * Math.cos(a);
+  if (r.espejo) lx = -lx;
+  return { x: lx / wCm * 100, y: -ly / hCm * 100 };
+}
+
+/** HTML de un objeto (una roca, o varias copias de una planta). ctx: { largo, alto, catalogo, sustrato, objetos }. */
+export function dibujarObjeto(o, ctx) {
+  const { largo, alto, catalogo } = ctx;
   const anchoSec = 2000 / largo; // una mata ocupa ~20 cm de ancho
-  const esc = perspectiva(o.b) * (o.escala || 1);
+  const ap = apoyo(o, ctx);
+  const esc = ap.esc * (o.escala || 1);
   const voltear = o.espejo ? -1 : 1;
   const orden = (o.orden || 0) * 30; // "Al frente"/"Atrás": salta unos 3 % de profundidad por toque
-  const sube = elevacion(sustrato, o.x, o.b, alto);
-  const abajo = 100 - o.b + sube;
+  const abajo = 100 - ap.y;
   if (o.paisaje) {
     const pa = PAISAJE.find(x => x.id === o.paisaje); if (!pa) return '';
     const h = Math.min(80, pa.alto / alto * 100 * esc), w = anchoSec * pa.ancho * (o.escala || 1);
-    const z = capa(o.b, 1) + orden;
-    return sombra(o.x, w * 0.9, o.b, z, sube) + imagen(archivoPaisaje(pa, o.v || 0), pa.nombre, '#7A6A5A',
+    const z = ap.z + 1 + orden;
+    return sombra(o.x, w * 0.9, ap.y, z, o.id) + imagen(archivoPaisaje(pa, o.v || 0), pa.nombre, '#7A6A5A',
       `left:${o.x - w / 2}%;width:${w}%;bottom:${abajo}%;height:${h}%;z-index:${z}` + giro(o.rot, voltear < 0), o.id);
   }
   const p = catalogo.find(x => x.id === o.planta); if (!p) return '';
@@ -279,11 +390,11 @@ function dibujarObjeto(o, { largo, alto, catalogo, sustrato }) {
   const alfombra = esAlfombra(p);
   const h = alfombra ? 40 : Math.min(85, Math.max(7, p.altura[1] / alto * 100)) * esc;
   const color = p.rojo ? '#C4553F' : '#3E9B58';
-  const z = capa(o.b, alfombra ? 2 : 0) + orden;
-  return (alfombra ? '' : sombra(o.x, anchoSec * (o.escala || 1) * 1.1, o.b, z, sube)) +
-    copiasVariadas(p, planoDe(o.b), o.id, o.x, anchoSec * (o.escala || 1), o.copias).map(({ dx, w, f, espejo }, n) =>
+  const z = ap.z + (alfombra && !ap.unido ? 2 : 0) + orden;
+  return (alfombra || ap.unido ? '' : sombra(ap.x, anchoSec * (o.escala || 1) * 1.1, ap.y, z, o.id)) +
+    copiasVariadas(p, ap.unido ? 'medio' : planoDe(o.b), o.id, ap.x, anchoSec * (o.escala || 1), o.copias).map(({ dx, w, f, espejo }, n) =>
       imagen(`img/plantas/${p.id}.png`, n ? '' : p.nombre, color,
-        `left:${o.x + dx * voltear - w / 2}%;width:${w}%;bottom:${abajo}%;height:${h * f}%;z-index:${z}` +
+        `left:${ap.x + dx * voltear - w / 2}%;width:${w}%;bottom:${abajo}%;height:${h * f}%;z-index:${z}` +
         giro(o.rot, espejo !== (voltear < 0)), o.id)).join('');
 }
 
@@ -307,15 +418,16 @@ function lampara(colores) {
 /** Vista frontal: lámpara, aire bajo el vidrio y el acuario con imágenes por capas, iluminado con los colores de la lámpara. */
 export function vistaFrontal({ acuario, diseno, catalogo, colores, seleccion }) {
   const { largo = 100, alto = 45 } = acuario || {};
-  const objetos = objetosDe(diseno, catalogo, alto);
+  const objetos = objetosDe(diseno, catalogo, alto, largo);
   const sustrato = diseno?.sustrato;
   const brillo = Math.max(...colores) / 100;
-  const capas = objetos.map(o => dibujarObjeto(o, { largo, alto, catalogo, sustrato })).join('');
+  const ctx = { largo, alto, catalogo, sustrato, objetos };
+  const capas = objetos.map(o => dibujarObjeto(o, ctx)).join('');
   const luz = colorDeLuz(colores);
   const borde = bordeSustrato(sustrato, alto);
   const tope = Math.min(...borde.map(p => p[1]));
   const tipo = tipoSustrato(acuario);
-  const arena = `clip-path:polygon(${borde.map(([x, y]) => `${x}% ${y}%`).join(',')},100% 100%,0% 100%);` +
+  const arena = `clip-path:polygon(${borde.map(([x, y]) => `${x}% ${y}%`).join(',')},100% 100%,0% 100%);z-index:1;` +
     `background:${fondoArena(tipo, tope, alto)}`;
   return `<div class="tanque">
     ${lampara(colores)}
@@ -333,14 +445,8 @@ export function vistaFrontal({ acuario, diseno, catalogo, colores, seleccion }) 
   </div></div>`;
 }
 
-/** Plantas montadas sobre una roca o tronco (su base cae dentro del elemento): se mueven junto con él. */
-export function montados(objetos, base, { largo = 100, alto = 45 } = {}) {
-  const pa = PAISAJE.find(x => x.id === base.paisaje); if (!pa) return [];
-  const w = 2000 / largo * pa.ancho * (base.escala || 1);
-  const h = Math.min(80, pa.alto / alto * 100 * perspectiva(base.b) * (base.escala || 1));
-  return objetos.filter(o => o.planta && o.b < ARENA[0] && Math.abs(o.x - base.x) <= w / 2 && o.b <= base.b && o.b >= base.b - h)
-    .map(o => o.id);
-}
+/** Plantas unidas a una roca o tronco: se mueven, giran y crecen con él. */
+export const montados = (objetos, base) => objetos.filter(o => o.sobre?.id === base.id).map(o => o.id);
 
 // ---------- Plantillas de estilo: un punto de partida que luego se mueve libremente ----------
 export const PLANTILLAS = [
@@ -350,7 +456,7 @@ export const PLANTILLAS = [
   { id: 'jungla', nombre: 'Jungla', nota: 'Troncos, epífitas y vegetación densa' },
 ];
 
-/** Arma un diseño con el estilo elegido usando las plantas del acuario (por zona). */
+/** Arma un diseño con el estilo elegido usando las plantas del acuario (por zona). Las epífitas quedan unidas a su roca o tronco. */
 export function plantilla(estilo, plantas, { largo = 100, alto = 45 } = {}) {
   const r = azar(estilo);
   const zona = z => plantas.filter(p => p.zona === z);
@@ -370,7 +476,7 @@ export function plantilla(estilo, plantas, { largo = 100, alto = 45 } = {}) {
   const roca = (id, x, b, escala, v = 0, rot = 0) => out.push(obj({ paisaje: id, x, b, escala, v, rot }));
   const sobre = (base, p, dx = 0) => { // epífita montada a media altura del elemento
     const pa = PAISAJE.find(z => z.id === base.paisaje);
-    const h = pa.alto / alto * 100 * perspectiva(base.b) * base.escala;
+    const h = pa.alto / alto * 100 * perspectivaV2(base.b) * base.escala;
     out.push(obj({ planta: p.id, x: base.x + dx, b: base.b - h * 0.55, escala: 0.8 }));
   };
   const n = Math.max(3, Math.round(largo / 20));
@@ -404,26 +510,31 @@ export function plantilla(estilo, plantas, { largo = 100, alto = 45 } = {}) {
     epifitas.forEach((p, i) => sobre(i % 2 ? t2 : t1, p));
     fila(alfombras, 6, 94, 93, n - 1, { escala: 0.8 });
   }
-  return out;
+  return aV3(out, { largo, alto }); // armado en unidades de la versión 2 (las mismas posiciones de siempre)
 }
 
 // ---------- Etapa 3: vista desde arriba y lista de compras ----------
-/** Profundidad en cm desde el vidrio de atrás (0) hasta el de adelante (ancho). Lo montado en rocas va a media profundidad. */
-export const profundidadCm = (b, ancho) => ancho * (b < ARENA[0] ? 0.45 : limitar((b - ARENA[0]) / (ARENA[1] - ARENA[0]), 0, 1));
+/** Profundidad en cm desde el vidrio de atrás (0) hasta el de adelante (ancho). */
+export const profundidadCm = (b, ancho) => ancho * profundidad(b);
 
-/** Vista desde arriba (SVG en cm): el fondo arriba, el frente abajo. Tocar una mancha elige el objeto. */
-export function vistaSuperior({ acuario, objetos, catalogo, seleccion = [] }) {
-  const { largo = 100, ancho = 40 } = acuario || {};
+/** Color del mapa de alturas: más claro = más alto. */
+const tonoAltura = (h, min, max) => {
+  const t = max > min ? (h - min) / (max - min) : 0.5, c = (a, b) => Math.round(a + (b - a) * t);
+  return `rgb(${c(48, 222)},${c(44, 206)},${c(40, 176)})`;
+};
+
+/**
+ * Vista desde arriba (SVG en cm): el fondo arriba, el frente abajo. Tocar una mancha elige el objeto.
+ * Con malla = { elegidos }: se edita la forma del sustrato (mapa de alturas con sus puntos; los objetos quedan tenues).
+ */
+export function vistaSuperior({ acuario, objetos, catalogo, seleccion = [], sustrato, malla }) {
+  const { largo = 100, ancho = 40, alto = 45 } = acuario || {};
   const numeros = numerar(objetos), elegidos = new Set([].concat(seleccion));
-  // Lo montado en una roca o tronco va a la profundidad de su soporte (no a "media profundidad").
-  const soporte = {};
-  const plantaPorId = Object.fromEntries(objetos.map(o => [o.id, o]));
-  for (const pa of objetos.filter(o => o.paisaje)) for (const id of montados(objetos, pa, acuario)) // si toca dos, el de base más cercana
-    if (soporte[id] === undefined || pa.b - plantaPorId[id].b < soporte[id] - plantaPorId[id].b) soporte[id] = pa.b;
-  const prof = o => soporte[o.id] ?? (o.b < ARENA[0] ? BASE.medio : o.b);
+  const ctx = { largo, alto, sustrato, objetos };
+  const prof = o => bEfectiva(o, objetos); // lo unido a una roca o tronco va a la profundidad de su soporte
   const orden = [...objetos].sort((a, b) => !!a.planta - !!b.planta || prof(a) - prof(b)); // primero rocas y troncos, luego plantas
   const formas = orden.map(o => {
-    const x = o.x / 100 * largo, y = profundidadCm(prof(o), ancho), e = o.escala || 1;
+    const x = (o.sobre ? apoyo(o, ctx).x : o.x) / 100 * largo, y = profundidadCm(prof(o), ancho), e = o.escala || 1;
     const borde = elegidos.has(o.id) ? ' stroke="#F2B544" stroke-width="1.2"' : ' stroke="rgba(0,0,0,.35)" stroke-width=".4"';
     if (o.paisaje) {
       const pa = PAISAJE.find(z => z.id === o.paisaje); if (!pa) return '';
@@ -433,17 +544,31 @@ export function vistaSuperior({ acuario, objetos, catalogo, seleccion = [] }) {
       return `<ellipse data-o="${o.id}" cx="${x}" cy="${y}" rx="${L / 2.4}" ry="${L / 3.6}" fill="${pa.id === 'roca-dragon' ? '#9A7B52' : pa.id === 'roca-negra' ? '#3B3E42' : '#7C858C'}"${borde}><title>${escapar(pa.nombre)}</title></ellipse>`;
     }
     const p = catalogo.find(z => z.id === o.planta); if (!p) return '';
-    const rx = 10 * e * (esAlfombra(p) ? 1 : 0.8), ry = esAlfombra(p) ? 5 * e : 4.5 * e;
+    const rx = 10 * e * (esAlfombra(p) ? 1 : 0.8) * (o.sobre ? 0.6 : 1), ry = (esAlfombra(p) ? 5 : 4.5) * e * (o.sobre ? 0.6 : 1);
     const color = p.rojo ? '#B5483A' : esAlfombra(p) ? '#7CC46A' : '#4E9B4F';
     return `<g data-o="${o.id}"><ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${color}" fill-opacity=".85"${borde}/>` +
       `<text x="${x}" y="${y + 1.4}" font-size="4" text-anchor="middle" fill="#fff" style="pointer-events:none">${numeros[p.id]}</text><title>${escapar(p.nombre)}</title></g>`;
   }).join('');
-  return `<svg class="vista-superior" viewBox="-2 -2 ${largo + 4} ${ancho + 4}" role="img" aria-label="Vista del acuario desde arriba">
+  let mapa = '', puntos = '';
+  if (malla) {
+    const m = sustrato?.malla || mallaDesde(sustrato, alto), min = Math.min(...m.cm), max = Math.max(...m.cm);
+    const N = 24, F = 12, w = largo / N, h = ancho / F; // celdas finas: se ve la forma suave
+    for (let f = 0; f < F; f++) for (let c = 0; c < N; c++)
+      mapa += `<rect x="${(c * w).toFixed(2)}" y="${(f * h).toFixed(2)}" width="${(w + 0.05).toFixed(2)}" height="${(h + 0.05).toFixed(2)}" fill="${tonoAltura(alturaSustrato({ malla: m }, (c + 0.5) / N * 100, (f + 0.5) / F), min, max)}"/>`;
+    const sel = new Set(malla.elegidos || []);
+    puntos = m.cm.map((cm, i) => {
+      const px = (i % m.cols) / (m.cols - 1) * largo, py = Math.floor(i / m.cols) / (m.filas - 1) * ancho, si = sel.has(i);
+      return `<circle data-m="${i}" cx="${px}" cy="${py}" r="${si ? 1.6 : 1.1}" fill="${si ? '#F2B544' : 'rgba(255,255,255,.75)'}" stroke="rgba(0,0,0,.5)" stroke-width=".3"/>` +
+        (si ? `<text x="${px}" y="${py - 2.2}" font-size="2.8" text-anchor="middle" fill="#fff" style="pointer-events:none">${Math.round(cm)}</text>` : '');
+    }).join('');
+  }
+  return `<svg class="vista-superior${malla ? ' editando' : ''}" viewBox="-2 -2 ${largo + 4} ${ancho + 4}" role="img" aria-label="Vista del acuario desde arriba">
     <rect x="0" y="0" width="${largo}" height="${ancho}" rx="2" fill="${SUSTRATOS[tipoSustrato(acuario)].colores[1]}" stroke="#5A6470" stroke-width=".6"/>
     <text x="${largo / 2}" y="-0.4" font-size="2.6" text-anchor="middle" fill="#8B96A0">fondo</text>
     <text x="${largo / 2}" y="${ancho + 1.9}" font-size="2.6" text-anchor="middle" fill="#8B96A0">frente</text>
-    ${formas}</svg>`;
+    ${malla ? `${mapa}<g style="opacity:.22;pointer-events:none">${formas}</g>${puntos}` : formas}</svg>`;
 }
+
 
 /**
  * Lista de compras aproximada. Cada mata ocupa ~20 cm × escala de ancho:
