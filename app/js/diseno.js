@@ -429,7 +429,7 @@ export function vistaFrontal({ acuario, diseno, catalogo, colores, seleccion }) 
   const tipo = tipoSustrato(acuario);
   const arena = `clip-path:polygon(${borde.map(([x, y]) => `${x}% ${y}%`).join(',')},100% 100%,0% 100%);z-index:1;` +
     `background:${fondoArena(tipo, tope, alto)}`;
-  return `<div class="tanque">
+  return `<div class="tanque" style="--prop:${(alto / largo * 1.09).toFixed(3)}">
     ${lampara(colores)}
     <div class="aire" style="aspect-ratio:${largo}/${(alto * 0.09).toFixed(1)}"></div>
     <div class="vista-frontal" style="aspect-ratio:${largo}/${alto};filter:brightness(${(0.22 + 0.85 * Math.min(1, brillo * 1.3)).toFixed(2)})"

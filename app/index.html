@@ -129,6 +129,37 @@
   .vista-frontal img, .vista-superior { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   .forma { display: inline-flex; align-items: center; gap: 6px; }
   .forma img { height: 26px; width: 40px; object-fit: contain; }
+  /* Diseñador: en celular vertical todo en una columna; en tablet y en celular acostado, dibujo a un lado y herramientas al otro. */
+  .di-cols { display: flex; flex-direction: column; gap: 14px; }
+  .di-izq, .di-der { gap: 14px; min-width: 0; }
+  /* Con el dedo: todo lo que se toca mide al menos 44 px. */
+  @media (pointer: coarse) {
+    .chip { height: 44px; }
+    .paso { width: 44px; height: 44px; }
+    #chip { height: 44px; }
+    .rampas .chip { height: 44px; }
+  }
+  @media (min-width: 768px) {
+    main { max-width: 1100px; padding: 20px 24px 104px; }
+    main > header, main > #aviso, main > section:not(#disenador), main > #version { width: 100%; max-width: 720px; margin-left: auto; margin-right: auto; }
+    main:has(> #disenador:not([hidden])) > :is(header, #aviso) { max-width: none; }
+    .di-cols { display: grid; grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); gap: 20px; align-items: start; }
+    .di-izq { position: sticky; top: 12px; }
+    .mezclas { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  }
+  /* Celular acostado (poco alto): el dibujo ocupa el alto disponible y las herramientas van en un panel que se desplaza. */
+  @media (orientation: landscape) and (max-height: 520px) {
+    main { max-width: none; padding: 8px 12px 80px; gap: 8px; }
+    main:has(> #disenador:not([hidden])) { padding-bottom: 8px; }
+    main:has(> #disenador:not([hidden])) > header { display: none; }
+    #disenador { gap: 8px; }
+    #disenador h2 { font-size: 18px !important; }
+    #disenador > div:first-child .btn { height: 40px; }
+    .di-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 40%); gap: 12px; align-items: start; }
+    .di-izq { position: sticky; top: 8px; }
+    .di-izq .tanque { width: min(100%, calc((100dvh - 80px) / var(--prop, .5))); margin: 0 auto; }
+    .di-der { max-height: calc(100dvh - 70px); overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+  }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -165,8 +196,12 @@
       <div><h2 style="font-size: 22px">Diseñar acuario</h2><div class="sec num" id="di-medidas"></div></div>
       <button id="di-listo" class="btn prim" type="button" style="flex: 0 0 auto">Listo</button>
     </div>
+    <div class="di-cols">
+    <div class="di-izq pila">
     <div id="di-vista"></div>
     <span id="di-faltan" class="sec"></span>
+    </div>
+    <div class="di-der pila">
     <p id="di-ayuda" class="sec" style="margin: 0">Toca una planta, roca o tronco para elegirlo; luego arrástralo. Si hay algo encima, toca otra vez para elegir lo de atrás. Hacia abajo = más al frente; todo queda apoyado en la arena. Suelta un musgo, helecho o Anubias sobre una roca o tronco y queda unido a él.</p>
     <div id="di-sel" class="tarjeta pila" style="gap: 10px; padding: 12px 14px" hidden>
       <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
@@ -248,6 +283,8 @@
       <button id="di-copiar" class="btn" type="button">Copiar lista</button>
     </div>
     <button id="di-imagen" class="btn" type="button">Guardar imagen</button>
+    </div>
+    </div>
   </section>
 
   <!-- PRIMER USO -->
