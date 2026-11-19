@@ -147,7 +147,7 @@ export function avisosDiseno(objetos, catalogo, alto) {
     const plano = o.sobre ? 'medio' : planoDe(o.b);
     if (plano === 'frente' && p.altura[1] > alto * 0.35) avisos.add(`${p.nombre} crece hasta ${p.altura[1]} cm: al frente va a tapar lo de atrás.`);
     if (plano === 'fondo' && p.altura[1] <= 5) avisos.add(`${p.nombre} es muy baja para el fondo: no se va a ver.`);
-    if (p.zona === 'epifita' && !soporteDe(o, objetos)) avisos.add(`${p.nombre} se amarra a roca o tronco: súbela encima de uno.`);
+    if (p.zona === 'epifita' && !soporteDe(o, objetos)) avisos.add(`${p.nombre} se amarra a roca o tronco: elígela y toca "Unir a roca o tronco".`);
   }
   return [...avisos];
 }

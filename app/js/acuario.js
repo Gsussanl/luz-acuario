@@ -183,7 +183,8 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   let varios = false;
   const elegido = () => diseno().objetos.find(o => o.id === sel);
   const elegidos = () => diseno().objetos.filter(o => grupo.has(o.id));
-  const elegir = id => { sel = id; grupo = new Set(id ? [id] : []); };
+  let uniendo = false;       // "Unir a roca o tronco": esperando que se toque la roca o tronco
+  const elegir = id => { sel = id; grupo = new Set(id ? [id] : []); uniendo = false; };
   const colorVista = () => obtenerColores().some(v => v) ? obtenerColores() : [70, 70, 60, 20];
   const nombreDe = o => o.planta ? plantas.find(p => p.id === o.planta)?.nombre : PAISAJE.find(x => x.id === o.paisaje)?.nombre;
 
@@ -275,11 +276,66 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     $('di-tamano-v').textContent = `${Math.round((o.escala || 1) * 100)} %`;
     const p = plantas.find(z => z.id === o.planta);
     $('di-copias-fila').hidden = !p;
+    $('di-unir-fila').hidden = !p || grupo.size > 1;
+    if (p && grupo.size === 1) pintarUnion(o);
     if (p) { const n = o.copias || (esAlfombra(p) ? 3 : !o.sobre && planoDe(o.b) === 'fondo' ? 4 : 3); $('di-copias').value = n; $('di-copias-v').textContent = n; }
     $('di-giro').value = o.rot || 0;
     $('di-giro-v').textContent = `${o.rot || 0}°`;
   }
   const cambiar = fn => { const lista = elegidos(); if (!lista.length) return; lista.forEach(fn); guardar(); pintarDisenador(); };
+
+  // ---------- Unir una planta a una roca o tronco (X: a lo largo, Y: altura, Z: delante o detrás) ----------
+  const textoX = v => v < 0 ? `izq. ${-v} %` : v > 0 ? `der. ${v} %` : 'al centro';
+  const textoY = v => v <= 0 ? 'en la base' : v >= 100 ? 'en la punta' : `${v} % de la altura`;
+  const LADOS = [[-1, 'Detrás'], [0, 'Encima'], [1, 'Delante']];
+  function pintarUnion(o) {
+    const r = soporteDe(o, diseno().objetos);
+    $('di-unir').hidden = !!r;
+    $('di-unir').setAttribute('aria-pressed', uniendo);
+    $('di-unir').textContent = uniendo ? 'Toca la roca o tronco… (toca aquí para cancelar)' : 'Unir a roca o tronco';
+    $('di-unido').hidden = !r;
+    if (!r) return;
+    $('di-unido-a').textContent = `Unida a ${nombreDe(r)}: se mueve, gira y crece con ella.`;
+    $('di-ux').value = o.sobre.x; $('di-ux-v').textContent = textoX(o.sobre.x);
+    $('di-uy').value = o.sobre.y; $('di-uy-v').textContent = textoY(o.sobre.y);
+    const z = Math.sign(o.sobre.z || 0);
+    $('di-uz').innerHTML = LADOS.map(([v, n]) => `<button type="button" class="chip planta" data-uz="${v}" aria-pressed="${z === v}">${n}</button>`).join('');
+  }
+  /** Une la planta elegida a la roca o tronco r, en el punto l (coordenadas de la roca). */
+  function unirA(r, l) {
+    const o = elegido(); if (!o?.planta) return;
+    o.sobre = { id: r.id, x: Math.round(Math.max(-50, Math.min(50, l.x))), y: Math.round(Math.max(0, Math.min(100, l.y))), z: 0 };
+    uniendo = false; guardar(); pintarDisenador();
+    avisar(`${nombreDe(o)} quedó unida a ${nombreDe(r)}. Ajusta el lugar con los controles o arrastrándola sobre ella.`);
+  }
+  $('di-unir').onclick = () => {
+    uniendo = !uniendo; pintarBarra();
+    if (uniendo) avisar('Toca en el dibujo la roca o tronco donde va (en el punto exacto), o su mancha en la vista de arriba.');
+  };
+  /** Cambia un eje de la unión; en vivo (sin guardar) mientras se desliza. */
+  function ajustarUnion(eje, v) {
+    const o = elegido(); if (!o?.sobre) return;
+    v = Math.round(Math.max(eje === 'x' ? -50 : 0, Math.min(eje === 'x' ? 50 : 100, v)));
+    o.sobre = { ...o.sobre, [eje]: v };
+    $(`di-u${eje}`).value = v; $(`di-u${eje}-v`).textContent = (eje === 'x' ? textoX : textoY)(v);
+    repintarEnVivo([o.id]);
+  }
+  $('di-ux').oninput = e => ajustarUnion('x', +e.target.value);
+  $('di-uy').oninput = e => ajustarUnion('y', +e.target.value);
+  $('di-ux').onchange = $('di-uy').onchange = () => { guardar(); pintarArriba(); };
+  $('di-unido').addEventListener('click', e => {
+    const b = e.target.closest('[data-eje]');
+    if (b) { const o = elegido(); if (o?.sobre) { ajustarUnion(b.dataset.eje, o.sobre[b.dataset.eje] + +b.dataset.d); guardar(); } return; }
+    const z = e.target.closest('[data-uz]');
+    if (z) { const o = elegido(); if (o?.sobre) { o.sobre = { ...o.sobre, z: +z.dataset.uz }; guardar(); pintarDisenador(); } }
+  });
+  $('di-separar').onclick = () => {
+    const o = elegido(), r = soporteDe(o, diseno().objetos); if (!r) return;
+    const ap = apoyo(o, contexto());
+    o.x = Math.min(100, Math.max(0, ap.x)); o.b = bDe(profundidad(r.b) + 0.06); delete o.sobre; // a la arena, justo delante
+    guardar(); pintarDisenador();
+    avisar(`${nombreDe(o)} volvió a la arena, delante de ${nombreDe(r)}.`);
+  };
 
   $('di-paleta').addEventListener('click', e => {
     if (e.target.closest('[data-mas]')) { paletaCompleta = true; return pintarPaleta(); }
@@ -466,6 +522,14 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   let arrastre = null;
   $('di-vista').addEventListener('contextmenu', e => e.preventDefault()); // sin menú de copiar/descargar al mantener el dedo
   $('di-vista').addEventListener('pointerdown', e => {
+    if (uniendo) { // tocar la roca o tronco donde va la planta, en el punto exacto
+      e.preventDefault();
+      const objs = diseno().objetos, esPaisaje = k => objs.find(z => z.id === k)?.paisaje;
+      const id = todosBajoElDedo(e.clientX, e.clientY).find(esPaisaje) || [bajoElDedo(e.clientX, e.clientY)].find(esPaisaje);
+      if (!id) return avisar('Ahí no hay roca ni tronco. Toca una roca o tronco, o cancela con el botón.');
+      const r = objs.find(z => z.id === id), caja = $('di-vista').querySelector('.vista-frontal').getBoundingClientRect();
+      return unirA(r, sobreDesdePunto(r, (e.clientX - caja.left) / caja.width * 100, (e.clientY - caja.top) / caja.height * 100, contexto()));
+    }
     // Si lo elegido está bajo el dedo (aunque tenga algo encima), este toque es para él: arrastrar o pasar al de atrás.
     const pila = todosBajoElDedo(e.clientX, e.clientY);
     const id = !varios && pila.includes(sel) ? sel : pila[0] || bajoElDedo(e.clientX, e.clientY);
@@ -591,6 +655,14 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   $('di-arriba').addEventListener('contextmenu', e => e.preventDefault());
   $('di-arriba').addEventListener('pointerdown', e => {
     if (editandoMalla) return pincelar(e, true);
+    if (uniendo) { // desde arriba: la planta queda a lo largo donde se tocó, a media altura
+      const objs = diseno().objetos;
+      const id = document.elementsFromPoint(e.clientX, e.clientY).map(z => z.closest?.('[data-o]')?.dataset.o).find(k => objs.find(z => z.id === k)?.paisaje);
+      if (!id) return avisar('Ahí no hay roca ni tronco. Toca una roca o tronco, o cancela con el botón.');
+      const r = objs.find(z => z.id === id), pa = PAISAJE.find(z => z.id === r.paisaje), a = datos.acuario;
+      const svg = $('di-arriba').querySelector('svg').getBoundingClientRect(), xCm = (e.clientX - svg.left) * (a.largo + 4) / svg.width - 2;
+      return unirA(r, { x: (xCm - r.x / 100 * a.largo) / (20 * pa.ancho * (r.escala || 1)) * 100 * (r.espejo ? -1 : 1), y: 60 });
+    }
     const pila = [...new Set(document.elementsFromPoint(e.clientX, e.clientY).map(z => z.closest?.('[data-o]')?.dataset.o).filter(Boolean))];
     if (!pila.length) return;
     const id = !varios && pila.includes(sel) ? sel : pila[0];
