@@ -1,0 +1,48 @@
+{
+  "_leyenda": {
+    "zona": "primer = primer plano, medio, fondo, epifita (se amarra a roca o tronco), flotante",
+    "luz": "1 baja, 2 media, 3 alta",
+    "co2": "0 no hace falta, 1 ayuda, 2 necesario",
+    "raiz": "true = se alimenta sobre todo por raíz (pide pastillas de abono)",
+    "fuente": "Consenso de bases de datos de plantas (Tropica, Flowgrow) y foros (UKAPS). Valores orientativos; revisar con la comunidad."
+  },
+  "plantas": [
+    {"id": "hc-cuba", "nombre": "Cuba", "cientifico": "Hemianthus callitrichoides 'Cuba'", "zona": "primer", "luz": 3, "co2": 2, "crecimiento": "medio", "raiz": false, "rojo": false, "altura": [1, 3], "nota": "Alfombra muy fina. Sin CO₂ se despega y se llena de algas."},
+    {"id": "monte-carlo", "nombre": "Monte Carlo", "cientifico": "Micranthemum tweediei", "zona": "primer", "luz": 2, "co2": 1, "crecimiento": "medio", "raiz": false, "rojo": false, "altura": [2, 5], "nota": "Alfombra más fácil que la Cuba."},
+    {"id": "glosso", "nombre": "Glosso", "cientifico": "Glossostigma elatinoides", "zona": "primer", "luz": 3, "co2": 2, "crecimiento": "rapido", "raiz": true, "rojo": false, "altura": [1, 3], "nota": "Con poca luz crece hacia arriba en vez de extenderse."},
+    {"id": "eleocharis", "nombre": "Pelo de ángel", "cientifico": "Eleocharis acicularis 'Mini'", "zona": "primer", "luz": 2, "co2": 1, "crecimiento": "medio", "raiz": true, "rojo": false, "altura": [3, 5], "nota": "Césped fino."},
+    {"id": "sagittaria", "nombre": "Sagitaria enana", "cientifico": "Sagittaria subulata", "zona": "primer", "luz": 1, "co2": 0, "crecimiento": "medio", "raiz": true, "rojo": false, "altura": [5, 15], "nota": "Alfombra resistente sin CO₂."},
+    {"id": "marsilea", "nombre": "Marsilea", "cientifico": "Marsilea hirsuta", "zona": "primer", "luz": 1, "co2": 1, "crecimiento": "lento", "raiz": true, "rojo": false, "altura": [2, 4], "nota": "Alfombra lenta para acuarios sin CO₂."},
+    {"id": "staurogyne", "nombre": "Staurogyne repens", "cientifico": "Staurogyne repens", "zona": "primer", "luz": 2, "co2": 1, "crecimiento": "medio", "raiz": true, "rojo": false, "altura": [5, 10], "nota": "Arbusto bajo y compacto."},
+    {"id": "crypto-parva", "nombre": "Cryptocoryne parva", "cientifico": "Cryptocoryne parva", "zona": "primer", "luz": 2, "co2": 1, "crecimiento": "lento", "raiz": true, "rojo": false, "altura": [3, 5], "nota": "La crypto más pequeña."},
+
+    {"id": "crypto-wendtii", "nombre": "Cryptocoryne wendtii", "cientifico": "Cryptocoryne wendtii", "zona": "medio", "luz": 1, "co2": 0, "crecimiento": "lento", "raiz": true, "rojo": true, "altura": [10, 15], "nota": "Muy resistente. Puede 'derretirse' al cambiarla de lugar y luego rebrota."},
+    {"id": "crypto-lutea", "nombre": "Cryptocoryne lutea", "cientifico": "Cryptocoryne × willisii 'Lutea'", "zona": "medio", "luz": 1, "co2": 0, "crecimiento": "lento", "raiz": true, "rojo": false, "altura": [10, 15], "nota": "Verde claro, fácil."},
+    {"id": "bucephalandra", "nombre": "Bucephalandra", "cientifico": "Bucephalandra sp.", "zona": "epifita", "luz": 1, "co2": 0, "crecimiento": "lento", "raiz": false, "rojo": true, "altura": [5, 10], "nota": "Se amarra a roca o tronco; no enterrar el rizoma."},
+    {"id": "anubia-nana", "nombre": "Anubia nana petite", "cientifico": "Anubias barteri var. nana 'Petite'", "zona": "epifita", "luz": 1, "co2": 0, "crecimiento": "lento", "raiz": false, "rojo": false, "altura": [3, 6], "nota": "Con mucha luz le salen algas en las hojas."},
+    {"id": "helecho-java", "nombre": "Helecho de Java", "cientifico": "Microsorum pteropus", "zona": "epifita", "luz": 1, "co2": 0, "crecimiento": "lento", "raiz": false, "rojo": false, "altura": [15, 30], "nota": "Indestructible; amarrar a tronco."},
+    {"id": "helecho-narrow", "nombre": "Helecho de Java 'Narrow'", "cientifico": "Microsorum pteropus 'Narrow Leaf'", "variedad_de": "helecho-java", "zona": "epifita", "luz": 1, "co2": 0, "crecimiento": "lento", "raiz": false, "rojo": false, "altura": [15, 25], "nota": "Hoja angosta; amarrar a tronco."},
+    {"id": "musgo-java", "nombre": "Musgo de Java", "cientifico": "Taxiphyllum barbieri", "zona": "epifita", "luz": 1, "co2": 0, "crecimiento": "medio", "raiz": false, "rojo": false, "altura": [2, 10], "nota": "Refugio ideal para camarones."},
+    {"id": "christmas-moss", "nombre": "Musgo navidad", "cientifico": "Vesicularia montagnei", "zona": "epifita", "luz": 2, "co2": 1, "crecimiento": "lento", "raiz": false, "rojo": false, "altura": [2, 6], "nota": "Más ordenado que el musgo de Java."},
+    {"id": "ludwigia-repens", "nombre": "Ludwigia repens", "cientifico": "Ludwigia repens", "zona": "medio", "luz": 2, "co2": 1, "crecimiento": "rapido", "raiz": false, "rojo": true, "altura": [20, 40], "nota": "Se pone roja con buena luz."},
+    {"id": "alternanthera", "nombre": "Alternanthera reineckii 'Mini'", "cientifico": "Alternanthera reineckii 'Mini'", "zona": "medio", "luz": 3, "co2": 2, "crecimiento": "medio", "raiz": true, "rojo": true, "altura": [10, 15], "nota": "Rojo intenso solo con luz alta, CO₂ y hierro."},
+    {"id": "pogostemon-helferi", "nombre": "Pogostemon helferi", "cientifico": "Pogostemon helferi", "zona": "medio", "luz": 2, "co2": 1, "crecimiento": "medio", "raiz": true, "rojo": false, "altura": [5, 10], "nota": "Hojas onduladas, compacta."},
+
+    {"id": "rotala-rotundifolia", "nombre": "Rotala rotundifolia", "cientifico": "Rotala rotundifolia", "zona": "fondo", "luz": 2, "co2": 1, "crecimiento": "rapido", "raiz": false, "rojo": true, "altura": [20, 50], "nota": "Puntas rosadas con buena luz; podar seguido."},
+    {"id": "rotala-hra", "nombre": "Rotala H'ra", "cientifico": "Rotala rotundifolia 'H'ra'", "zona": "fondo", "luz": 3, "co2": 2, "crecimiento": "rapido", "raiz": false, "rojo": true, "altura": [20, 40], "nota": "Roja anaranjada; exigente."},
+    {"id": "rotala-colorata", "nombre": "Rotala colorata", "cientifico": "Rotala rotundifolia 'Colorata'", "variedad_de": "rotala-rotundifolia", "zona": "fondo", "luz": 3, "co2": 2, "crecimiento": "rapido", "raiz": false, "rojo": true, "altura": [20, 40], "nota": "Naranja a rosado con luz alta; pide hierro."},
+    {"id": "rotala-blood-red", "nombre": "Rotala 'Blood Red'", "cientifico": "Rotala rotundifolia 'Blood Red'", "variedad_de": "rotala-rotundifolia", "zona": "fondo", "luz": 3, "co2": 2, "crecimiento": "rapido", "raiz": false, "rojo": true, "altura": [20, 40], "nota": "Rojo profundo; con poca luz se pone verde."},
+    {"id": "rotala-green", "nombre": "Rotala 'Green'", "cientifico": "Rotala rotundifolia 'Green'", "variedad_de": "rotala-rotundifolia", "zona": "fondo", "luz": 2, "co2": 1, "crecimiento": "rapido", "raiz": false, "rojo": false, "altura": [20, 50], "nota": "Verde claro; da contraste junto a las rojas."},
+    {"id": "bacopa-colorata", "nombre": "Bacopa colorata", "cientifico": "Bacopa sp. 'Colorata'", "zona": "medio", "luz": 2, "co2": 1, "crecimiento": "medio", "raiz": false, "rojo": true, "altura": [10, 30], "nota": "Rosado en las puntas; buena transición entre rojos y verdes."},
+    {"id": "ludwigia-super-red", "nombre": "Ludwigia 'Super Red'", "cientifico": "Ludwigia palustris 'Super Red'", "zona": "fondo", "luz": 3, "co2": 2, "crecimiento": "medio", "raiz": false, "rojo": true, "altura": [20, 40], "nota": "Roja oscura con luz alta."},
+    {"id": "hygrophila-polysperma", "nombre": "Hygrophila polysperma", "cientifico": "Hygrophila polysperma", "zona": "fondo", "luz": 1, "co2": 0, "crecimiento": "rapido", "raiz": false, "rojo": false, "altura": [20, 50], "nota": "Absorbe muchos nutrientes; ayuda contra algas."},
+    {"id": "limnophila", "nombre": "Limnophila sessiliflora", "cientifico": "Limnophila sessiliflora", "zona": "fondo", "luz": 2, "co2": 1, "crecimiento": "rapido", "raiz": false, "rojo": false, "altura": [20, 50], "nota": "Hojas finas tipo pino."},
+    {"id": "vallisneria", "nombre": "Vallisneria", "cientifico": "Vallisneria spiralis", "zona": "fondo", "luz": 1, "co2": 0, "crecimiento": "rapido", "raiz": true, "rojo": false, "altura": [30, 80], "nota": "Cinta larga; se reproduce por estolones."},
+    {"id": "echinodorus", "nombre": "Espada amazónica", "cientifico": "Echinodorus grisebachii 'Bleherae'", "zona": "fondo", "luz": 1, "co2": 0, "crecimiento": "medio", "raiz": true, "rojo": false, "altura": [20, 50], "nota": "Grande; pide pastillas de abono."},
+    {"id": "bacopa", "nombre": "Bacopa caroliniana", "cientifico": "Bacopa caroliniana", "zona": "fondo", "luz": 2, "co2": 1, "crecimiento": "lento", "raiz": false, "rojo": false, "altura": [20, 40], "nota": "Tallos firmes; puntas cobrizas con luz alta."},
+    {"id": "cabomba", "nombre": "Cabomba", "cientifico": "Cabomba caroliniana", "zona": "fondo", "luz": 3, "co2": 2, "crecimiento": "rapido", "raiz": false, "rojo": false, "altura": [30, 80], "nota": "Se deshace con poca luz."},
+
+    {"id": "salvinia", "nombre": "Salvinia", "cientifico": "Salvinia natans", "zona": "flotante", "luz": 1, "co2": 0, "crecimiento": "rapido", "raiz": false, "rojo": false, "altura": [0, 0], "nota": "Hace sombra a las plantas de abajo."},
+    {"id": "limnobium", "nombre": "Limnobium", "cientifico": "Limnobium laevigatum", "zona": "flotante", "luz": 1, "co2": 0, "crecimiento": "rapido", "raiz": false, "rojo": false, "altura": [0, 0], "nota": "Raíces largas; refugio para alevines."}
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "_leyenda": "Mezclas de 4 canales en % (rojo, verde, azul, uv) para la familia 4 (L900 Pro). Las de 'week' salen de la app oficial v3.0.25 (ModeSetting1Adapter + ModeSettingFragment.sendData); las 'propias' son punto de partida nuestro, sin medir.",
+  "categorias": [
+    {"id": "plantas", "nombre": "Plantas", "mezclas": [
+      {"id": "crecimiento", "nombre": "Crecimiento", "canales": [80, 70, 60, 30], "nota": "Uso diario en plantados"},
+      {"id": "rojos", "nombre": "Resaltar rojos", "canales": [95, 60, 50, 20], "nota": "Rotalas, Alternanthera, Ludwigia"},
+      {"id": "verde-natural", "nombre": "Verde natural", "canales": [60, 75, 60, 15], "nota": "Verdes sin tinte"},
+      {"id": "baja", "nombre": "Plantas de luz baja", "canales": [45, 40, 40, 10], "nota": "Anubias, helechos, Buce, crypto"}
+    ]},
+    {"id": "fauna", "nombre": "Peces y camarones", "mezclas": [
+      {"id": "colores-vivos", "nombre": "Colores vivos", "canales": [85, 50, 80, 60], "nota": "Neones, cardenales, guppys"},
+      {"id": "camarones", "nombre": "Camarones", "canales": [70, 45, 45, 15], "nota": "Resalta red cherry sin estresar"},
+      {"id": "observar", "nombre": "Observar", "canales": [60, 55, 55, 20], "nota": "Suave para ver de noche"}
+    ]},
+    {"id": "especiales", "nombre": "Especiales", "mezclas": [
+      {"id": "anti-algas", "nombre": "Anti-algas", "canales": [50, 45, 40, 10], "nota": "Menos intensidad mientras se controla un brote"},
+      {"id": "aclimatacion", "nombre": "Aclimatación", "canales": [35, 30, 30, 0], "nota": "Primeros días de peces nuevos"},
+      {"id": "luna", "nombre": "Luz de luna", "canales": [0, 0, 5, 0], "nota": "Azul al 5 %"}
+    ]},
+    {"id": "week", "nombre": "Week Aqua (originales)", "mezclas": [
+      {"id": "week-green", "nombre": "Green", "canales": [46, 97, 49, 100]},
+      {"id": "week-red", "nombre": "Red", "canales": [71, 79, 49, 100]},
+      {"id": "week-mixed", "nombre": "Mixed", "canales": [51, 95, 49, 100]},
+      {"id": "week-gorgeous", "nombre": "Gorgeous", "canales": [82, 40, 80, 100]},
+      {"id": "week-colorful", "nombre": "Colorful", "canales": [100, 40, 63, 100]},
+      {"id": "week-algae", "nombre": "Algae", "canales": [69, 100, 48, 0]},
+      {"id": "week-nature", "nombre": "Nature", "canales": [51, 100, 51, 0]},
+      {"id": "week-elegant", "nombre": "Elegant", "canales": [56, 100, 57, 0]},
+      {"id": "week-brisk", "nombre": "Brisk", "canales": [40, 100, 40, 0]},
+      {"id": "week-fresh", "nombre": "Fresh", "canales": [38, 100, 41, 0]},
+      {"id": "week-enjoy", "nombre": "Enjoy", "canales": [47, 100, 43, 0]},
+      {"id": "week-white", "nombre": "White", "canales": [54, 100, 45, 0]}
+    ]}
+  ]
+}
