@@ -31,12 +31,33 @@ export function avisosDeGrupo(habitantesConCantidad) {
     .map(({ especie, cantidad }) => `${especie.nombre}: tienes ${cantidad}; se recomiendan al menos ${especie.grupo} para que estén tranquilos.`);
 }
 
+/** Avisos que dependen del sustrato: alfombras en gravilla, plantas de raíz sin nutrientes, aquasoil nuevo o gastado. */
+export function avisosDeSustrato(plantas, habitantes, sustrato, dias) {
+  const avisos = [];
+  const nombres = l => l.map(x => x.nombre).join(', ');
+  const alfombras = plantas.filter(p => p.zona === 'primer');
+  if (sustrato === 'gravilla' && alfombras.length)
+    avisos.push(`${nombres(alfombras)}: las alfombras no enraízan bien en gravilla. Usa aquasoil o arena fina.`);
+  const deRaiz = plantas.filter(p => p.raiz);
+  if (sustrato !== 'aquasoil' && deRaiz.length)
+    avisos.push(`${nombres(deRaiz)}: pon pastillas de abono junto a sus raíces cada 2–3 meses.`);
+  if (sustrato === 'aquasoil' && dias != null && dias < 28)
+    avisos.push('Aquasoil nuevo libera amonio: cambia 50 % del agua 2 veces por semana el primer mes. No metas camarones todavía.');
+  if (sustrato === 'aquasoil' && dias != null && dias > 548)
+    avisos.push('Tu aquasoil probablemente ya se agotó: agrega pastillas de abono.');
+  const dura = habitantes.filter(h => h.agua === 'dura');
+  if (sustrato === 'aquasoil' && dura.length)
+    avisos.push(`${nombres(dura)}: el aquasoil baja el pH y la dureza (KH), y ${dura.length > 1 ? 'prefieren' : 'prefiere'} agua más dura.`);
+  return avisos;
+}
+
 /**
  * @param {object[]} plantas  elementos de plantas.json
  * @param {object[]} habitantes  elementos de habitantes.json
- * @param {{co2: boolean, nuevo: boolean}} equipo  co2 = tiene CO2 inyectado; nuevo = menos de 6 semanas
+ * @param {{co2: boolean, nuevo: boolean, sustrato?: string, dias?: number}} equipo  co2 = tiene CO2 inyectado; nuevo = menos de 6 semanas;
+ *   sustrato = 'aquasoil' | 'silice' | 'gravilla'; dias = días desde el montaje
  */
-export function recomendar(plantas, habitantes, { co2, nuevo }) {
+export function recomendar(plantas, habitantes, { co2, nuevo, sustrato = 'aquasoil', dias }) {
   const avisos = [];
   // La planta más exigente manda, pero sin CO2 no conviene pasar de luz media (algas).
   let nivel = Math.max(1, ...plantas.map(p => p.luz));
@@ -56,8 +77,10 @@ export function recomendar(plantas, habitantes, { co2, nuevo }) {
   luz.canales = { rojo: hayRojas ? 80 : 60, verde: 70, azul: 60, uv: 30 };
 
   const abonado = { ...ABONADO[co2 ? nivel : Math.min(nivel, 2)] };
-  const deRaiz = plantas.filter(p => p.raiz);
-  if (deRaiz.length) abonado.pastillas = `Pastillas de abono cada 2–3 meses junto a: ${deRaiz.map(p => p.nombre).join(', ')}.`;
+  abonado.sustrato = sustrato === 'aquasoil'
+    ? 'El aquasoil ya trae nutrientes: el primer año basta con el abono líquido de arriba.'
+    : `La ${sustrato === 'silice' ? 'arena sílice' : 'gravilla'} no trae nutrientes: todo depende del abono líquido y de las pastillas.`;
+  avisos.push(...avisosDeSustrato(plantas, habitantes, sustrato, dias));
   if (hayRojas) abonado.extra = 'Las plantas rojas agradecen hierro extra.';
 
   let co2Rec = null;

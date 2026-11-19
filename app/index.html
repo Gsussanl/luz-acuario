@@ -202,6 +202,7 @@
       <details class="plegable">
         <summary><h2>Sustrato</h2></summary>
         <div class="pila" style="gap: 8px; padding-top: 8px">
+          <div id="di-sustratos" class="chips envolver" aria-label="Tipo de sustrato"></div>
           <label class="pila" style="gap: 4px"><span class="sec">Más alto atrás · <span id="di-pendiente-v" class="num">0 cm</span></span>
             <input id="di-pendiente" type="range" min="0" max="15" step="1" value="0" aria-label="Cuánto más alto está el sustrato atrás"></label>
           <div id="di-perfiles" class="chips envolver"></div>
@@ -221,10 +222,9 @@
       <div id="di-arriba"></div>
     </div>
     <div id="di-avisos" class="nota-aviso" role="note" hidden></div>
-    <!-- Lista de compras: oculta por ahora (el código sigue listo). -->
-    <div class="pila" style="gap: 8px" hidden>
+    <div class="pila" style="gap: 8px">
       <h2>Lista de compras <span class="sec" style="font-weight: 400">· aproximada</span></h2>
-      <div id="di-leyenda" class="tarjeta lista" style="padding: 4px 14px"></div>
+      <div class="tarjeta" style="padding: 4px 14px"><div id="di-leyenda" class="lista"></div><div id="di-sustrato-compra" class="lista" style="border-top: 1px solid var(--linea)"></div></div>
       <button id="di-copiar" class="btn" type="button">Copiar lista</button>
     </div>
     <button id="di-imagen" class="btn" type="button">Guardar imagen</button>
@@ -256,6 +256,12 @@
         <label class="opcion"><input type="radio" name="tipo" value="co2" checked><span><b>Plantado con CO₂</b><br><span class="sec">Permite plantas exigentes como la Cuba</span></span></label>
         <label class="opcion"><input type="radio" name="tipo" value="sin-co2"><span><b>Plantado sin CO₂</b><br><span class="sec">Plantas fáciles, luz media o baja</span></span></label>
         <label class="opcion"><input type="radio" name="tipo" value="peces"><span><b>Solo peces o decoración</b><br><span class="sec">La luz es para ver, no para crecer</span></span></label>
+      </fieldset>
+      <fieldset style="border: none; margin: 0; padding: 0" class="pila">
+        <legend class="campo" style="padding: 0; margin-bottom: 6px">¿Qué sustrato tienes?</legend>
+        <label class="opcion"><input type="radio" name="sustrato" value="aquasoil" checked><span><b>Granulado nutritivo (aquasoil)</b><br><span class="sec">Bolitas oscuras con abono; lo mejor para plantas</span></span></label>
+        <label class="opcion"><input type="radio" name="sustrato" value="silice"><span><b>Arena sílice</b><br><span class="sec">Arena clara y fina, sin nutrientes</span></span></label>
+        <label class="opcion"><input type="radio" name="sustrato" value="gravilla"><span><b>Gravilla</b><br><span class="sec">Piedritas, sin nutrientes</span></span></label>
       </fieldset>
       <fieldset style="border: none; margin: 0; padding: 0" class="pila">
         <legend class="campo" style="padding: 0; margin-bottom: 6px">¿Cuándo lo montaste?</legend>

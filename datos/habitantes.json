@@ -4,6 +4,7 @@
     "grupo": "mínimo recomendado de ejemplares",
     "temp": "rango °C",
     "sensible": "lista de cosas que afectan a la especie: cobre (abonos con cobre), co2_alto, cambios_bruscos",
+    "agua": "dura = prefiere agua dura (pH y KH altos); sin el campo, le va bien el agua blanda o media",
     "plantas": "true = respeta las plantas; false = las come o las arranca",
     "fuente": "Datos generales de acuarismo; valores orientativos."
   },
@@ -13,15 +14,15 @@
     {"id": "rummy", "nombre": "Tetra borracho (rummy nose)", "tipo": "pez", "cm": 5, "grupo": 8, "temp": [24, 27], "plantas": true, "sensible": ["co2_alto"]},
     {"id": "rasbora", "nombre": "Rasbora arlequín", "tipo": "pez", "cm": 4, "grupo": 8, "temp": [22, 27], "plantas": true, "sensible": []},
     {"id": "chili", "nombre": "Rasbora chili", "tipo": "pez", "cm": 2, "grupo": 10, "temp": [20, 28], "plantas": true, "sensible": []},
-    {"id": "guppy", "nombre": "Guppy", "tipo": "pez", "cm": 5, "grupo": 3, "temp": [22, 28], "plantas": true, "sensible": []},
+    {"id": "guppy", "agua": "dura", "nombre": "Guppy", "tipo": "pez", "cm": 5, "grupo": 3, "temp": [22, 28], "plantas": true, "sensible": []},
     {"id": "betta", "nombre": "Betta", "tipo": "pez", "cm": 6, "grupo": 1, "temp": [24, 28], "plantas": true, "sensible": []},
     {"id": "otocinclus", "nombre": "Otocinclus", "tipo": "pez", "cm": 4, "grupo": 6, "temp": [22, 26], "plantas": true, "sensible": ["cambios_bruscos"]},
     {"id": "corydora", "nombre": "Corydora", "tipo": "pez", "cm": 5, "grupo": 6, "temp": [22, 26], "plantas": true, "sensible": []},
     {"id": "escalar", "nombre": "Pez ángel (escalar)", "tipo": "pez", "cm": 15, "grupo": 1, "temp": [24, 30], "plantas": true, "sensible": []},
     {"id": "siames", "nombre": "Siamés come algas", "tipo": "pez", "cm": 15, "grupo": 1, "temp": [24, 26], "plantas": true, "sensible": []},
-    {"id": "goldfish", "nombre": "Goldfish", "tipo": "pez", "cm": 20, "grupo": 2, "temp": [18, 24], "plantas": false, "sensible": []},
+    {"id": "goldfish", "agua": "dura", "nombre": "Goldfish", "tipo": "pez", "cm": 20, "grupo": 2, "temp": [18, 24], "plantas": false, "sensible": []},
     {"id": "amano", "nombre": "Camarón amano", "tipo": "camaron", "cm": 5, "grupo": 3, "temp": [20, 28], "plantas": true, "sensible": ["cobre", "co2_alto"]},
     {"id": "red-cherry", "nombre": "Camarón red cherry", "tipo": "camaron", "cm": 3, "grupo": 10, "temp": [20, 27], "plantas": true, "sensible": ["cobre", "co2_alto", "cambios_bruscos"]},
-    {"id": "nerita", "nombre": "Caracol nerita", "tipo": "caracol", "cm": 2, "grupo": 1, "temp": [22, 28], "plantas": true, "sensible": ["cobre"]}
+    {"id": "nerita", "agua": "dura", "nombre": "Caracol nerita", "tipo": "caracol", "cm": 2, "grupo": 1, "temp": [22, 28], "plantas": true, "sensible": ["cobre"]}
   ]
 }

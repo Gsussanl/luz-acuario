@@ -12,9 +12,11 @@ export const PAISAJE = [
   { id: 'roca-dragon', nombre: 'Roca Dragon', alto: 14, ancho: 1.3, variantes: 3 },
   { id: 'roca-pagoda', nombre: 'Roca Pagoda', alto: 16, ancho: 1.2 },
   { id: 'roca-negra', nombre: 'Roca negra', alto: 12, ancho: 1.3, variantes: 2 },
+  { id: 'roca-elefante', nombre: 'Roca piel de elefante', alto: 14, ancho: 1.3 },
   { id: 'tronco-spider', nombre: 'Tronco Spider', alto: 28, ancho: 1.6 },
   { id: 'tronco-dragon', nombre: 'Tronco leño', alto: 30, ancho: 2.2 },
   { id: 'tronco-manzanita', nombre: 'Tronco Manzanita', alto: 30, ancho: 1.8 },
+  { id: 'tronco-raiz', nombre: 'Tronco raíz', alto: 26, ancho: 1.4 },
 ];
 // Variantes: <id>.png, <id>-2.png, <id>-3.png… Cada roca usa la suya para que no se vean clonadas.
 export const archivoPaisaje = (pa, v = 0) => {
@@ -183,6 +185,80 @@ export function bordeSustrato(sustrato, alto = 45) {
   return Array.from({ length: 21 }, (_, i) => [i * 5, ARENA[0] + 0.5 - elevacion(sustrato, i * 5, ARENA[0], alto)]);
 }
 
+// ---------- Tipo de sustrato: color en el dibujo y cuánto comprar ----------
+/**
+ * Cada tipo: nombre, colores de la arena (arriba, medio, abajo) y granitos que se ven encima
+ * ([color, radio px, cuántos por cada cuadro de 40×40 px]). Un solo lugar para la pantalla y "Guardar imagen".
+ * textura: foto del sustrato (mosaico sin costura que representa TEXTURA_CM de alto) que cubre la arena; si no carga, se ven el degradado y los granitos.
+ */
+export const SUSTRATOS = {
+  aquasoil: { nombre: 'Aquasoil', largo: 'Granulado nutritivo (aquasoil)', colores: ['#1C1713', '#271F19', '#120E0B'],
+    granos: [['rgba(120,96,72,.55)', 0.8, 70], ['rgba(0,0,0,.6)', 0.9, 45]], kgPorLitro: 0, textura: 'img/sustrato/aquasoil.jpg' },
+  silice: { nombre: 'Arena sílice', largo: 'Arena sílice', colores: ['#D6C8AA', '#C9B996', '#A99779'],
+    granos: [['rgba(255,250,235,.3)', 0.5, 40], ['rgba(110,90,60,.2)', 0.5, 30]], kgPorLitro: 1.5, textura: 'img/sustrato/silice.jpg' },
+  gravilla: { nombre: 'Gravilla', largo: 'Gravilla', colores: ['#6B6157', '#5A5148', '#3F3832'],
+    granos: [['rgba(190,180,165,.6)', 1.9, 9], ['rgba(28,24,20,.6)', 1.7, 9], ['rgba(145,122,98,.65)', 1.5, 11]], kgPorLitro: 1.6, textura: 'img/sustrato/gravilla.jpg' },
+};
+/** Tipo de sustrato del acuario; si no lo tiene guardado: aquasoil en plantados, gravilla en "solo peces". */
+/** Alto real que representa el mosaico de la textura: así los granos miden lo mismo con o sin pendiente. */
+export const TEXTURA_CM = 16;
+export const tipoSustrato = acuario => SUSTRATOS[acuario?.sustrato] ? acuario.sustrato : acuario?.tipo === 'peces' ? 'gravilla' : 'aquasoil';
+/** Granitos al azar (semilla fija: siempre igual) en un cuadro de ancho × alto px: [x, y, radio, color]. */
+export function granos(tipo, ancho = 40, alto = 40, semilla = 7) {
+  const azar = () => ((semilla = (semilla * 16807) % 2147483647) / 2147483647);
+  return (SUSTRATOS[tipo] || SUSTRATOS.aquasoil).granos.flatMap(([color, r, n]) =>
+    Array.from({ length: Math.round(n * ancho * alto / 1600) }, () => [azar() * ancho, azar() * alto, r * (0.6 + azar() * 0.8), color]));
+}
+const mosaicos = {};
+/**
+ * Fondo CSS de la arena: la foto del tipo (granos a escala real según el alto del acuario, más oscura hacia el frente)
+ * o, sin foto, un mosaico de granitos (SVG); debajo, el degradado de colores.
+ */
+export function fondoArena(tipo, tope = 78, alto = 45) {
+  const t = SUSTRATOS[tipo] || SUSTRATOS.aquasoil, [a, b, c] = t.colores;
+  const degradado = `linear-gradient(${a} ${tope}%,${b} ${tope + (100 - tope) * 0.35}%,${c} 100%)`;
+  if (t.textura) return `linear-gradient(transparent ${tope}%,rgba(0,0,0,.35) 100%),url('${t.textura}') left bottom/auto ${(TEXTURA_CM / alto * 100).toFixed(1)}% repeat,${degradado}`;
+  mosaicos[tipo] ??= "url('data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">${
+    granos(tipo).map(([x, y, r, col]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(2)}" fill="${col}"/>`).join('')}</svg>`) + "')";
+  return `${mosaicos[tipo]} 0 0/40px 40px,${degradado}`;
+}
+
+/** Altura del sustrato en cm en x (0–100 % del largo) y profundidad d (0 = atrás, 1 = vidrio del frente). */
+export function alturaSustrato(sustrato, x, d) {
+  const frente = sustrato?.frente ?? 3;
+  return frente + (sustrato?.atras || 0) * perfil(sustrato?.perfil, x) * (1 - d);
+}
+const BOLSA_KG = 5;
+/**
+ * Cuánto sustrato comprar: volumen promediando una cuadrícula de 10×10 puntos (sirve con pendiente y cualquier perfil),
+ * más 10 % (se asienta y se pierde al acomodar). Las rocas no se descuentan.
+ * Aquasoil se vende en bolsas de 3 y 9 L (la combinación que sobre menos y con menos bolsas); sílice y gravilla por kg, en bolsas de 5 kg.
+ */
+export function sustratoAComprar(acuario, sustrato) {
+  const { largo = 100, ancho = 35 } = acuario || {}, N = 10;
+  let suma = 0;
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) suma += alturaSustrato(sustrato, (i + 0.5) * 100 / N, (j + 0.5) / N);
+  const promedio = suma / (N * N);
+  const neto = largo * ancho * promedio / 1000, litros = Math.round(neto * 1.1 * 10) / 10;
+  const tipo = tipoSustrato(acuario), t = SUSTRATOS[tipo];
+  const frente = Math.round(alturaSustrato(sustrato, 50, 1));
+  const atras = Math.round(Math.max(...Array.from({ length: 21 }, (_, i) => alturaSustrato(sustrato, i * 5, 0))));
+  let bolsas, kg = null;
+  if (tipo === 'aquasoil') {
+    const de3 = Math.max(1, Math.ceil(litros / 3)), n9 = Math.floor(de3 / 3), n3 = de3 - n9 * 3;
+    bolsas = [n9 && `${n9} bolsa${n9 > 1 ? 's' : ''} de 9 L`, n3 && `${n3}${n9 ? '' : ` bolsa${n3 > 1 ? 's' : ''}`} de 3 L`]
+      .filter(Boolean).join(' + ') + ` (${de3 * 3} L)`;
+  } else {
+    kg = Math.round(litros * t.kgPorLitro * 10) / 10;
+    const n = Math.max(1, Math.ceil(kg / BOLSA_KG));
+    bolsas = `${n} bolsa${n > 1 ? 's' : ''} de ${BOLSA_KG} kg (${n * BOLSA_KG} kg)`;
+  }
+  const alturas = atras > frente ? `${frente} cm al frente, ${atras} cm atrás` : `${frente} cm parejo`;
+  const cantidad = `~${Math.round(litros)} L${kg ? ` (≈${Math.round(kg)} kg)` : ''}`;
+  return { tipo, nombre: t.nombre, neto: Math.round(neto * 10) / 10, litros, kg, bolsas, frente, atras,
+    texto: `Sustrato · ${t.nombre}: ${cantidad} → ${bolsas} (${alturas})` };
+}
+
 /** HTML de un objeto (una roca, o varias copias de una planta). */
 function dibujarObjeto(o, { largo, alto, catalogo, sustrato }) {
   const anchoSec = 2000 / largo; // una mata ocupa ~20 cm de ancho
@@ -238,15 +314,16 @@ export function vistaFrontal({ acuario, diseno, catalogo, colores, seleccion }) 
   const luz = colorDeLuz(colores);
   const borde = bordeSustrato(sustrato, alto);
   const tope = Math.min(...borde.map(p => p[1]));
+  const tipo = tipoSustrato(acuario);
   const arena = `clip-path:polygon(${borde.map(([x, y]) => `${x}% ${y}%`).join(',')},100% 100%,0% 100%);` +
-    `background:linear-gradient(#2A2018 ${tope}%,#3A2C20 ${tope + (100 - tope) * 0.35}%,#241A12 100%)`;
+    `background:${fondoArena(tipo, tope, alto)}`;
   return `<div class="tanque">
     ${lampara(colores)}
     <div class="aire" style="aspect-ratio:${largo}/${(alto * 0.09).toFixed(1)}"></div>
     <div class="vista-frontal" style="aspect-ratio:${largo}/${alto};filter:brightness(${(0.22 + 0.85 * Math.min(1, brillo * 1.3)).toFixed(2)})"
       role="img" aria-label="Vista frontal del acuario">
     <div class="agua"></div>
-    <div class="sustrato" style="${arena}" data-borde="${borde.map(p => p.join(' ')).join(',')}"></div>
+    <div class="sustrato" style="${arena}" data-tipo="${tipo}" data-alto="${alto}" data-borde="${borde.map(p => p.join(' ')).join(',')}"></div>
     ${capas}
     ${resaltar(seleccion)}
     <div class="luz" style="background:${luz};opacity:${(0.15 + brillo * 0.25).toFixed(2)}"></div>
@@ -362,7 +439,7 @@ export function vistaSuperior({ acuario, objetos, catalogo, seleccion = [] }) {
       `<text x="${x}" y="${y + 1.4}" font-size="4" text-anchor="middle" fill="#fff" style="pointer-events:none">${numeros[p.id]}</text><title>${escapar(p.nombre)}</title></g>`;
   }).join('');
   return `<svg class="vista-superior" viewBox="-2 -2 ${largo + 4} ${ancho + 4}" role="img" aria-label="Vista del acuario desde arriba">
-    <rect x="0" y="0" width="${largo}" height="${ancho}" rx="2" fill="#3A2C20" stroke="#5A6470" stroke-width=".6"/>
+    <rect x="0" y="0" width="${largo}" height="${ancho}" rx="2" fill="${SUSTRATOS[tipoSustrato(acuario)].colores[1]}" stroke="#5A6470" stroke-width=".6"/>
     <text x="${largo / 2}" y="-0.4" font-size="2.6" text-anchor="middle" fill="#8B96A0">fondo</text>
     <text x="${largo / 2}" y="${ancho + 1.9}" font-size="2.6" text-anchor="middle" fill="#8B96A0">frente</text>
     ${formas}</svg>`;

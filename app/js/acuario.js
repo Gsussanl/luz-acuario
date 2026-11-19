@@ -1,7 +1,7 @@
 // Módulo del acuario: registro, recomendación y bitácora. No sabe nada de Bluetooth;
 // solo le pasa al módulo de luz "usa esta mezcla" o "usa estas horas" cuando el usuario lo pide.
 import { recomendar, horasDeArranque, avisosDeGrupo } from '../../datos/recomendar.js';
-import { PAISAJE, ARENA, seccionesPara, autocompletar, celdasAObjetos, nuevoId, posicionInicial, numerar, avisosDiseno, vistaFrontal, montados, plantilla, PLANTILLAS, vistaSuperior, listaCompras, esAlfombra, PERFILES, archivoPaisaje } from './diseno.js';
+import { PAISAJE, ARENA, seccionesPara, autocompletar, celdasAObjetos, nuevoId, posicionInicial, numerar, avisosDiseno, vistaFrontal, montados, plantilla, PLANTILLAS, vistaSuperior, listaCompras, esAlfombra, PERFILES, archivoPaisaje, SUSTRATOS, tipoSustrato, sustratoAComprar, granos, TEXTURA_CM } from './diseno.js';
 
 const CLAVE = 'acuario';
 const TIPOS = { co2: 'Plantado con CO₂', 'sin-co2': 'Plantado sin CO₂', peces: 'Solo peces' };
@@ -39,6 +39,8 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     const a = borrador.acuario;
     $('a-nombre').value = a.nombre; $('a-largo').value = a.largo; $('a-ancho').value = a.ancho; $('a-alto').value = a.alto;
     document.querySelector(`input[name=tipo][value="${a.tipo}"]`).checked = true;
+    document.querySelector(`input[name=sustrato][value="${tipoSustrato(a)}"]`).checked = true;
+    sustratoElegido = !!a.sustrato;
     $('a-fecha').value = a.fecha === hoyISO() ? '' : a.fecha;
     $('a-montando').setAttribute('aria-pressed', a.fecha === hoyISO());
     pintarLitros(); pintarSeleccion();
@@ -59,9 +61,16 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
       a[k] = v;
     }
     a.tipo = document.querySelector('input[name=tipo]:checked').value;
+    a.sustrato = document.querySelector('input[name=sustrato]:checked').value;
     a.fecha = $('a-fecha').value || hoyISO();
     return true;
   }
+  // Sustrato: sigue al tipo de acuario (aquasoil en plantados, gravilla en "solo peces") hasta que la persona elija uno.
+  let sustratoElegido = false;
+  document.querySelectorAll('input[name=tipo]').forEach(r => r.addEventListener('change', () => {
+    if (!sustratoElegido) document.querySelector(`input[name=sustrato][value="${tipoSustrato({ tipo: r.value })}"]`).checked = true;
+  }));
+  document.querySelectorAll('input[name=sustrato]').forEach(r => r.addEventListener('change', () => { sustratoElegido = true; }));
   const litros = a => Math.round(a.largo * a.ancho * a.alto / 1000);
   function pintarLitros() {
     const a = { largo: +$('a-largo').value || 0, ancho: +$('a-ancho').value || 0, alto: +$('a-alto').value || 0 };
@@ -152,6 +161,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     }
     datos.diseno ??= { version: 2, objetos: [] };
     datos.diseno.sustrato ??= { atras: 6, perfil: 'plano' }; // como se monta un plantado: más alto atrás
+    datos.diseno.sustrato.frente ??= 3; // al frente, mínimo 3 cm
     return datos.diseno;
   }
 
@@ -180,6 +190,8 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     $('di-arriba').innerHTML = vistaSuperior({ acuario: a, objetos, catalogo: plantas, seleccion: [...grupo] });
     const s = diseno().sustrato || {};
     $('di-pendiente').value = s.atras || 0; $('di-pendiente-v').textContent = `${s.atras || 0} cm`;
+    const tipo = tipoSustrato(a);
+    $('di-sustratos').innerHTML = Object.entries(SUSTRATOS).map(([id, x]) => `<button type="button" class="chip planta" data-sustrato="${id}" aria-pressed="${tipo === id}">${x.nombre}</button>`).join('');
     $('di-perfiles').innerHTML = PERFILES.map(x => `<button type="button" class="chip planta" data-perfil="${x.id}" aria-pressed="${(s.perfil || 'plano') === x.id}">${x.nombre}</button>`).join('');
     pintarBarra();
     pintarPaleta();
@@ -193,6 +205,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
       }),
       ...compras.hardscape.map(x => `<div><b style="width: 22px">·</b><span style="flex: 1">${escapar(x.nombre)}<br><span class="sec">${x.detalle}</span></span><b class="num">${x.cantidad} ${x.unidad}</b></div>`),
     ].join('') || '<div class="sec">Aún no hay nada en el diseño.</div>';
+    pintarSustratoCompra();
     const avisos = avisosDiseno(objetos, plantas, a.alto);
     $('di-avisos').innerHTML = avisos.map(x => `<p>${escapar(x)}</p>`).join('');
     $('di-avisos').hidden = !avisos.length;
@@ -476,11 +489,22 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   $('di-arriba').addEventListener('pointerup', soltarArriba);
   $('di-arriba').addEventListener('pointercancel', soltarArriba);
 
+  /** Línea del sustrato en la lista de compras (se actualiza al mover la pendiente). */
+  function pintarSustratoCompra() {
+    const c = sustratoAComprar(datos.acuario, diseno().sustrato);
+    $('di-sustrato-compra').innerHTML = `<div><b style="width: 22px">·</b><span style="flex: 1">Sustrato · ${escapar(c.nombre)}<br><span class="sec">${c.frente === c.atras ? `${c.frente} cm parejo` : `${c.frente} cm al frente, ${c.atras} cm atrás`} · ~${Math.round(c.litros)} L${c.kg ? ` (≈${Math.round(c.kg)} kg)` : ''} con 10 % extra</span></span><b class="num" style="text-align: right">${escapar(c.bolsas)}</b></div>`;
+  }
+  $('di-sustratos').addEventListener('click', e => {
+    const b = e.target.closest('[data-sustrato]'); if (!b) return;
+    datos.acuario.sustrato = b.dataset.sustrato;
+    guardar(); pintarDisenador();
+  });
   // Sustrato: más alto atrás (cm) y forma a lo largo; las plantas y rocas se apoyan en la nueva altura.
   $('di-pendiente').oninput = e => {
     diseno().sustrato = { ...diseno().sustrato, atras: +e.target.value };
     $('di-pendiente-v').textContent = `${e.target.value} cm`;
     dibujar('di-vista', colorVista(), [...grupo]);
+    pintarSustratoCompra();
   };
   $('di-pendiente').onchange = () => { guardar(); pintarDisenador(); };
   $('di-perfiles').addEventListener('click', e => {
@@ -515,7 +539,8 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     const c = listaCompras(diseno().objetos, plantas), a = datos.acuario;
     const texto = [`Lista para ${a.nombre} (${a.largo}×${a.ancho}×${a.alto} cm) · cantidades aproximadas`,
       ...c.plantas.map(x => `- ${x.nombre}: ${x.cantidad} ${x.unidad}`),
-      ...c.hardscape.map(x => `- ${x.nombre}: ${x.cantidad} ${x.unidad} ${x.detalle}`)].join('\n');
+      ...c.hardscape.map(x => `- ${x.nombre}: ${x.cantidad} ${x.unidad} ${x.detalle}`),
+      `- ${sustratoAComprar(a, diseno().sustrato).texto}`].join('\n');
     try { await navigator.clipboard.writeText(texto); avisar('Lista copiada: pégala en WhatsApp o en tus notas.'); }
     catch { prompt('Copia la lista:', texto); }
   };
@@ -542,7 +567,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     const a = datos.acuario; if (!a) return;
     $('titulo').textContent = a.nombre;
     $('ac-nombre').textContent = a.nombre;
-    $('ac-medidas').textContent = `${a.largo} × ${a.ancho} × ${a.alto} cm · ${litros(a)} L · ${TIPOS[a.tipo]}`;
+    $('ac-medidas').textContent = `${a.largo} × ${a.ancho} × ${a.alto} cm · ${litros(a)} L · ${TIPOS[a.tipo]} · ${SUSTRATOS[tipoSustrato(a)].nombre}`;
     const dias = Math.floor((new Date(hoyISO()) - new Date(a.fecha)) / DIA);
     $('ac-montaje').textContent = dias <= 0 ? 'Montado hoy · semana 1 de arranque'
       : `Montado hace ${dias} días · semana ${Math.floor(dias / 7) + 1}`;
@@ -553,7 +578,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
       || '<span class="sec">Sin plantas registradas.</span>';
     $('ac-habitantes').textContent = selH.map(x => `${x.cantidad} ${x.especie.nombre}`).join(' · ') || 'Ninguno registrado.';
 
-    const r = selP.length ? recomendar(selP, selH.map(x => x.especie), { co2: a.tipo === 'co2', nuevo: false }) : null;
+    const r = selP.length ? recomendar(selP, selH.map(x => x.especie), { co2: a.tipo === 'co2', nuevo: false, sustrato: tipoSustrato(a), dias }) : null;
     const objetivo = r ? r.luz.horas : 7;
     const horasHoy = horasDeArranque(objetivo, Math.max(0, dias));
     const canales = r ? [r.luz.canales.rojo, r.luz.canales.verde, r.luz.canales.azul, r.luz.canales.uv] : [60, 60, 60, 20];
@@ -582,7 +607,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
       ${r?.co2 ? `<div class="pila" style="gap: 6px; border-top: 1px solid var(--linea); padding-top: 12px"><h2>CO₂ · ${r.co2.objetivo}</h2>
         <span class="sec">Prender ${r.co2.inicio}; apagar ${r.co2.fin}. ${r.co2.control}.</span></div>` : ''}
       ${r ? `<div class="pila" style="gap: 6px; border-top: 1px solid var(--linea); padding-top: 12px"><h2>Abonado</h2>
-        <span class="sec">${[r.abonado.metodo, `Cambio de agua: ${r.abonado.cambioAgua}`, r.abonado.pastillas, r.abonado.extra].filter(Boolean).map(escapar).join('<br>')}</span></div>` : ''}
+        <span class="sec">${[r.abonado.metodo, `Cambio de agua: ${r.abonado.cambioAgua}`, r.abonado.sustrato, r.abonado.extra].filter(Boolean).map(escapar).join('<br>')}</span></div>` : ''}
       ${avisos.length ? `<div class="nota-aviso" role="note">${avisos.map(x => `<p>${escapar(x)}</p>`).join('')}</div>` : ''}
       <p class="sec" style="margin: 0">Valores de partida de la comunidad, no una receta. Ajusta según cómo respondan tus plantas.</p>
       </div></details>`;
@@ -663,9 +688,22 @@ async function imagenDeVista(vista) {
     if (p.arena) {
       const borde = (arena.dataset.borde || '0 78.5,100 78.5').split(',').map(p => p.split(' ').map(Number));
       const top = Math.min(...borde.map(p => p[1])) / 100 * H;
-      g = ctx.createLinearGradient(0, top, 0, H); g.addColorStop(0, '#2A2018'); g.addColorStop(0.35, '#3A2C20'); g.addColorStop(1, '#241A12');
-      ctx.fillStyle = g; ctx.beginPath(); borde.forEach(([x, y], i) => ctx[i ? 'lineTo' : 'moveTo'](x / 100 * W, y / 100 * H));
-      ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill(); continue;
+      const t = SUSTRATOS[arena.dataset.tipo] || SUSTRATOS.aquasoil;
+      g = ctx.createLinearGradient(0, top, 0, H); t.colores.forEach((col, i) => g.addColorStop([0, 0.35, 1][i], col));
+      ctx.save(); ctx.beginPath(); borde.forEach(([x, y], i) => ctx[i ? 'lineTo' : 'moveTo'](x / 100 * W, y / 100 * H));
+      ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fillStyle = g; ctx.fill(); ctx.clip();
+      // La foto del sustrato (como en pantalla: alta como la franja, repetida a lo largo, más oscura al frente);
+      // si no carga, los mismos granitos que en pantalla.
+      const foto = t.textura && await new Promise(ok => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = t.textura; });
+      if (foto) {
+        const alto = TEXTURA_CM / (+arena.dataset.alto || 45) * H, ancho = foto.naturalWidth * alto / foto.naturalHeight;
+        for (let y = H - alto; y > top - alto; y -= alto) for (let x = 0; x < W; x += ancho) ctx.drawImage(foto, x, y, ancho, alto);
+        g = ctx.createLinearGradient(0, top, 0, H); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.35)');
+        ctx.fillStyle = g; ctx.fillRect(0, top, W, H - top);
+      } else for (const [x, y, r, color] of granos(arena.dataset.tipo, W, H - top)) {
+        ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, top + y, r, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore(); continue;
     }
     const el = p.el, x = el.offsetLeft, y = el.offsetTop, w = el.offsetWidth, h = el.offsetHeight;
     if (el.classList.contains('sombra')) {
