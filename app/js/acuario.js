@@ -146,7 +146,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   }
   /** Vista frontal del diseño en el contenedor, con los colores que tiene la lámpara. */
   function dibujar(idContenedor, colores, seleccion) {
-    $(idContenedor).innerHTML = vistaFrontal({ acuario: datos.acuario, diseno: diseno(), catalogo: plantas, colores, seleccion });
+    $(idContenedor).innerHTML = vistaFrontal({ acuario: datos.acuario, diseno: diseno(), catalogo: plantas, colores, seleccion, candados: idContenedor === 'di-vista' });
   }
   function automatico() {
     const n = seccionesPara(datos.acuario?.largo || 100);
@@ -202,7 +202,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     $('di-zoom-caja').style.setProperty('--prop', (a.alto / a.largo * 1.09).toFixed(3)); // alto/ancho del dibujo (acostado)
     dibujar('di-vista', colorVista(), [...grupo]);
     pintarArriba();
-    pintarAtajos(); pintarMalla();
+    pintarAtajos(); pintarMalla(); pintarBloqueados();
     const tipo = tipoSustrato(a);
     $('di-sustratos').innerHTML = Object.entries(SUSTRATOS).map(([id, x]) => `<button type="button" class="chip planta" data-sustrato="${id}" aria-pressed="${tipo === id}">${x.nombre}</button>`).join('');
     pintarBarra();
@@ -259,8 +259,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     $('di-arriba').style.touchAction = grupo.size ? 'none' : 'pan-y';
     tactil();
     if (!o) return;
-    $('di-fijar').setAttribute('aria-pressed', !!o.fijo);
-    $('di-fijar').textContent = o.fijo ? 'Profundidad fija: solo se mueve de lado' : 'Fijar profundidad';
+
     const pa = PAISAJE.find(z => z.id === o.paisaje);
     $('di-tipo-fila').hidden = !pa; $('di-forma-fila').hidden = !(pa?.variantes > 1);
     if (pa) {
@@ -372,7 +371,30 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   };
   $('di-copias').onchange = () => { guardar(); pintarDisenador(); };
   $('di-voltear').onclick = () => cambiar(o => { o.espejo = !o.espejo; });
-  $('di-fijar').onclick = () => { const fijar = !elegido()?.fijo; cambiar(o => { o.fijo = fijar; }); };
+  // Bloquear: lo bloqueado no se elige al tocarlo (el toque pasa a lo de atrás). Se dibuja igual; en el diseñador lleva un candado.
+  $('di-bloquear').onclick = () => {
+    const n = grupo.size; if (!n) return;
+    for (const o of elegidos()) o.bloqueado = true;
+    elegir(null); guardar(); pintarDisenador();
+    avisar(`${n > 1 ? `${n} cosas bloqueadas` : 'Bloqueado'}: ya no se elige al tocarlo. Para desbloquear, abre "Bloqueados".`);
+  };
+  function pintarBloqueados() {
+    const lista = diseno().objetos.filter(o => o.bloqueado);
+    $('di-bloqueados').hidden = !lista.length;
+    $('di-bloqueados-t').textContent = `Bloqueados (${lista.length})`;
+    $('di-bloqueados-lista').innerHTML = lista.map(o => `<div><span style="flex: 1">${escapar(nombreDe(o) || '')}</span>
+      <button type="button" class="chip" data-desbloquear="${o.id}">Desbloquear</button></div>`).join('');
+  }
+  $('di-bloqueados-lista').addEventListener('click', e => {
+    const b = e.target.closest('[data-desbloquear]'); if (!b) return;
+    const o = diseno().objetos.find(z => z.id === b.dataset.desbloquear); if (!o) return;
+    delete o.bloqueado; elegir(o.id); guardar(); pintarDisenador();
+    avisar(`${nombreDe(o)} desbloqueado y elegido.`);
+  });
+  $('di-desbloquear-todos').onclick = () => {
+    for (const o of diseno().objetos) delete o.bloqueado;
+    guardar(); pintarDisenador(); avisar('Todo desbloqueado.');
+  };
   $('di-tipos').addEventListener('click', e => {
     const b = e.target.closest('[data-tipo]'); if (!b) return;
     const familia = b.dataset.tipo.split('-')[0];
@@ -406,7 +428,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   $('di-varios').onclick = () => { varios = !varios; pintarBarra(); avisar(varios ? 'Toca cada cosa que quieras sumar o quitar del grupo. Arrastra una y se mueven todas.' : 'Elegir varios: apagado.'); };
   $('di-especie').onclick = () => { // todas las matas de la misma especie (o rocas del mismo tipo)
     const o = elegido(); if (!o) return;
-    grupo = new Set(diseno().objetos.filter(z => o.planta ? z.planta === o.planta : z.paisaje === o.paisaje).map(z => z.id));
+    grupo = new Set(diseno().objetos.filter(z => !z.bloqueado && (o.planta ? z.planta === o.planta : z.paisaje === o.paisaje)).map(z => z.id));
     pintarDisenador();
   };
   // ---------- Tocar y arrastrar ----------
@@ -438,22 +460,24 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     if (img.style.transform.includes('scaleX(-1)')) u = 1 - u;
     return m.ctx.getImageData(Math.min(m.w - 1, u * m.w | 0), Math.min(m.h - 1, v * m.h | 0), 1, 1).data[3] > 40;
   }
+  /** ¿Se puede elegir tocándolo? Lo bloqueado no: el toque pasa a lo que está detrás. */
+  const elegible = el => el.dataset?.o && $('di-vista').contains(el) && !diseno().objetos.find(z => z.id === el.dataset.o)?.bloqueado;
   /** Qué hay bajo el dedo: primero donde se ve exacto; si no, a unos píxeles (ramas finas del Manzanita o Spider). */
   function bajoElDedo(x, y) {
-    const pilas = document.elementsFromPoint(x, y).filter(el => el.dataset?.o && $('di-vista').contains(el));
+    const pilas = document.elementsFromPoint(x, y).filter(elegible);
     const exacto = pilas.find(el => el.tagName !== 'IMG' || opaco(el, x, y));
     if (exacto) return exacto.dataset.o;
     const R = 9, cerca = [[R, 0], [-R, 0], [0, R], [0, -R], [R, R], [-R, -R], [R, -R], [-R, R]];
     for (const [dx, dy] of cerca) {
-      const el = document.elementsFromPoint(x + dx, y + dy).find(z => z.dataset?.o && $('di-vista').contains(z) && (z.tagName !== 'IMG' || opaco(z, x + dx, y + dy)));
+      const el = document.elementsFromPoint(x + dx, y + dy).find(z => elegible(z) && (z.tagName !== 'IMG' || opaco(z, x + dx, y + dy)));
       if (el) return el.dataset.o;
     }
     return null;
   }
-  /** Todo lo visible bajo el dedo, de adelante hacia atrás (para pasar al de atrás tocando otra vez). */
-  function todosBajoElDedo(x, y) {
+  /** Todo lo visible bajo el dedo, de adelante hacia atrás (para pasar al de atrás tocando otra vez). Con incluirBloqueados, también lo bloqueado. */
+  function todosBajoElDedo(x, y, incluirBloqueados = false) {
     return [...new Set(document.elementsFromPoint(x, y)
-      .filter(el => el.dataset?.o && $('di-vista').contains(el) && (el.tagName !== 'IMG' || opaco(el, x, y)))
+      .filter(el => (incluirBloqueados ? el.dataset?.o && $('di-vista').contains(el) : elegible(el)) && (el.tagName !== 'IMG' || opaco(el, x, y)))
       .map(el => el.dataset.o))];
   }
   const contexto = () => ({ largo: datos.acuario.largo, alto: datos.acuario.alto, catalogo: plantas, sustrato: diseno().sustrato, objetos: diseno().objetos });
@@ -462,7 +486,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   /**
    * Aplica un desplazamiento: dx en % del largo, dd en profundidad (0 a 1 = de atrás al frente), dy en % del alto (solo
    * para lo unido a una roca: sube o baja sobre ella). Todo queda en la arena: nada flota. Cerca del vidrio o del fondo,
-   * se pega al borde (imán). "Fijar profundidad" solo deja moverlo de lado.
+   * se pega al borde (imán).
    */
   function mover(ids, { dx = 0, dd = 0, dy = 0 }) {
     const objs = diseno().objetos, ctx = contexto(), mueven = new Set(ids);
@@ -476,7 +500,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
         continue;
       }
       o.x = Math.min(100, Math.max(0, o.x + dx));
-      if (!o.fijo) { let d = profundidad(o.b) + dd; if (d < 0.03) d = 0; if (d > 0.97) d = 1; o.b = bDe(d); }
+      let d = profundidad(o.b) + dd; if (d < 0.03) d = 0; if (d > 0.97) d = 1; o.b = bDe(d);
     }
   }
   /**
@@ -525,7 +549,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     if (uniendo) { // tocar la roca o tronco donde va la planta, en el punto exacto
       e.preventDefault();
       const objs = diseno().objetos, esPaisaje = k => objs.find(z => z.id === k)?.paisaje;
-      const id = todosBajoElDedo(e.clientX, e.clientY).find(esPaisaje) || [bajoElDedo(e.clientX, e.clientY)].find(esPaisaje);
+      const id = todosBajoElDedo(e.clientX, e.clientY, true).find(esPaisaje) || [bajoElDedo(e.clientX, e.clientY)].find(esPaisaje);
       if (!id) return avisar('Ahí no hay roca ni tronco. Toca una roca o tronco, o cancela con el botón.');
       const r = objs.find(z => z.id === id), caja = $('di-vista').querySelector('.vista-frontal').getBoundingClientRect();
       return unirA(r, sobreDesdePunto(r, (e.clientX - caja.left) / caja.width * 100, (e.clientY - caja.top) / caja.height * 100, contexto()));
@@ -663,7 +687,8 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
       const svg = $('di-arriba').querySelector('svg').getBoundingClientRect(), xCm = (e.clientX - svg.left) * (a.largo + 4) / svg.width - 2;
       return unirA(r, { x: (xCm - r.x / 100 * a.largo) / (20 * pa.ancho * (r.escala || 1)) * 100 * (r.espejo ? -1 : 1), y: 60 });
     }
-    const pila = [...new Set(document.elementsFromPoint(e.clientX, e.clientY).map(z => z.closest?.('[data-o]')?.dataset.o).filter(Boolean))];
+    const pila = [...new Set(document.elementsFromPoint(e.clientX, e.clientY).map(z => z.closest?.('[data-o]')?.dataset.o)
+      .filter(id => id && !diseno().objetos.find(z => z.id === id)?.bloqueado))];
     if (!pila.length) return;
     const id = !varios && pila.includes(sel) ? sel : pila[0];
     if (!grupo.has(id) || varios) return elegirConToque(id);

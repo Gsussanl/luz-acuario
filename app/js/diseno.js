@@ -416,13 +416,18 @@ function lampara(colores) {
 }
 
 /** Vista frontal: lámpara, aire bajo el vidrio y el acuario con imágenes por capas, iluminado con los colores de la lámpara. */
-export function vistaFrontal({ acuario, diseno, catalogo, colores, seleccion }) {
+const CANDADO = '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+/** Vista frontal. candados: en el diseñador, lo bloqueado lleva un candado chico en su base (no sale en la imagen guardada). */
+export function vistaFrontal({ acuario, diseno, catalogo, colores, seleccion, candados = false }) {
   const { largo = 100, alto = 45 } = acuario || {};
   const objetos = objetosDe(diseno, catalogo, alto, largo);
   const sustrato = diseno?.sustrato;
   const brillo = Math.max(...colores) / 100;
   const ctx = { largo, alto, catalogo, sustrato, objetos };
-  const capas = objetos.map(o => dibujarObjeto(o, ctx)).join('');
+  const capas = objetos.map(o => dibujarObjeto(o, ctx)).join('') + (candados ? objetos.filter(o => o.bloqueado).map(o => {
+    const ap = apoyo(o, ctx);
+    return `<div class="candado" style="left:${ap.x}%;bottom:${100 - ap.y + 0.5}%" title="Bloqueado">${CANDADO}</div>`;
+  }).join('') : '');
   const luz = colorDeLuz(colores);
   const borde = bordeSustrato(sustrato, alto);
   const tope = Math.min(...borde.map(p => p[1]));

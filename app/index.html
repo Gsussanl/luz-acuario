@@ -124,7 +124,10 @@
   .vista-superior.editando { touch-action: none; }
   .vista-superior { width: 100%; display: block; border-radius: 10px; background: #12181D; }
   .vista-superior [data-o] { cursor: pointer; }
-  #di-varios[aria-pressed="true"], #di-fijar[aria-pressed="true"] { border-color: var(--sol); color: var(--sol); }
+  #di-varios[aria-pressed="true"] { border-color: var(--sol); color: var(--sol); }
+  .vista-frontal .candado { position: absolute; width: 14px; height: 14px; margin-left: -7px; z-index: 2990; pointer-events: none;
+    background: rgba(14,17,20,.75); border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+  .vista-frontal .candado svg { width: 10px; height: 10px; fill: none; stroke: #F2B544; stroke-width: 2; }
   /* Mantener el dedo sobre una planta no abre el menú de copiar/descargar imagen. */
   .vista-frontal img, .vista-superior { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   .forma { display: inline-flex; align-items: center; gap: 6px; }
@@ -264,8 +267,13 @@
         <button id="di-varios" class="btn" type="button" aria-pressed="false">Elegir varios</button>
         <button id="di-especie" class="btn" type="button">Toda la especie</button>
       </div>
-      <button id="di-fijar" class="btn" type="button" aria-pressed="false">Fijar profundidad</button>
+      <button id="di-bloquear" class="btn" type="button">Bloquear (que no se elija al tocar)</button>
     </div>
+    <details id="di-bloqueados" class="plegable tarjeta" style="padding: 10px 14px" hidden>
+      <summary><h2 id="di-bloqueados-t">Bloqueados</h2></summary>
+      <div id="di-bloqueados-lista" class="lista" style="padding-top: 6px"></div>
+      <button id="di-desbloquear-todos" class="btn" type="button" style="width: 100%; margin-top: 8px">Desbloquear todos</button>
+    </details>
     <div class="pila" style="gap: 8px">
       <h2>Agregar</h2>
       <label class="campo"><span class="solo-lector">Buscar planta, roca o tronco</span><input id="di-buscar" type="search" placeholder="Buscar planta, roca o tronco"></label>
