@@ -2,7 +2,7 @@
 // solo le pasa al módulo de luz "usa esta mezcla" o "usa estas horas" cuando el usuario lo pide.
 import { recomendar, horasDeArranque, avisosDeGrupo } from '../../datos/recomendar.js';
 import { PAISAJE, seccionesPara, autocompletar, celdasAObjetos, nuevoId, posicionInicial, numerar, avisosDiseno, vistaFrontal, plantilla, PLANTILLAS, vistaSuperior, listaCompras, esAlfombra, PERFILES, archivoPaisaje, SUSTRATOS, tipoSustrato, sustratoAComprar, granos, TEXTURA_CM, aplicarMatriz, OLAS,
-  aV3, mallaDesde, suavizar, consejosComposicion, apoyo, sobreDesdePunto, dibujarObjeto, soporteDe, bDe, profundidad, planoDe, MALLA, ALTO_MIN, ALTO_AVISO, altoMax, sustratoMasAlto } from './diseno.js';
+  aV3, mallaDesde, suavizar, consejosComposicion, gruposAgregar, resumenCompras, apoyo, sobreDesdePunto, dibujarObjeto, soporteDe, bDe, profundidad, planoDe, MALLA, ALTO_MIN, ALTO_AVISO, altoMax, sustratoMasAlto } from './diseno.js';
 
 const CLAVE = 'acuario';
 const TIPOS = { co2: 'Plantado con CO₂', 'sin-co2': 'Plantado sin CO₂', peces: 'Solo peces' };
@@ -235,25 +235,33 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
         : '';
     }, 700);
   }
-  let paletaCompleta = false;
-  /** Agregar: sin buscar se ven unas pocas (tus plantas primero); el buscador recorre todo el catálogo, rocas y troncos. */
+  let verTodas = false; const gruposAbiertos = new Set();
+  /**
+   * Agregar compacto: el buscador (recorre todo el catálogo, rocas y troncos), una fila "En tu acuario" (máximo 6)
+   * y "Ver todas": el catálogo agrupado por tipo, cada grupo plegado.
+   */
   function pintarPaleta() {
     const { selP } = seleccion();
     const f = $('di-buscar').value.trim().toLowerCase();
-    const todo = [
-      ...selP.map(p => ({ planta: p.id, texto: p.nombre, busca: p.nombre + ' ' + p.cientifico })),
-      ...PAISAJE.map(x => ({ paisaje: x.id, texto: x.nombre, busca: x.nombre })),
-      ...plantas.filter(p => !selP.includes(p)).map(p => ({ planta: p.id, texto: p.nombre, busca: p.nombre + ' ' + p.cientifico, otra: true })),
-    ];
-    const visibles = f ? todo.filter(x => x.busca.toLowerCase().includes(f)) : todo.filter(x => !x.otra);
-    const POCAS = 6, cortar = !f && !paletaCompleta && visibles.length > POCAS + 1;
-    const lista = cortar ? visibles.slice(0, POCAS) : visibles;
-    $('di-paleta').innerHTML = lista.map(x =>
-      `<button type="button" class="chip planta" data-agregar='${JSON.stringify({ planta: x.planta, paisaje: x.paisaje })}'>+ ${escapar(x.texto)}${x.otra ? ' <span class="sec">(no está en tu lista)</span>' : ''}</button>`).join('')
-      + (cortar ? `<button type="button" class="chip" data-mas>Ver ${visibles.length - POCAS} más…</button>` : '')
-      + (!f && paletaCompleta ? '<button type="button" class="chip" data-menos>Ver menos</button>' : '')
-      || '<span class="sec">Nada con ese nombre. Prueba con otra palabra.</span>';
+    const chip = x => `<button type="button" class="chip planta" data-agregar='${JSON.stringify({ planta: x.planta, paisaje: x.paisaje })}'>+ ${escapar(x.texto)}${x.otra ? ' <span class="sec">(no está en tu lista)</span>' : ''}</button>`;
+    if (f) {
+      const todo = [
+        ...selP.map(p => ({ planta: p.id, texto: p.nombre, busca: p.nombre + ' ' + p.cientifico })),
+        ...PAISAJE.map(x => ({ paisaje: x.id, texto: x.nombre, busca: x.nombre })),
+        ...plantas.filter(p => !selP.includes(p)).map(p => ({ planta: p.id, texto: p.nombre, busca: p.nombre + ' ' + p.cientifico, otra: true })),
+      ].filter(x => x.busca.toLowerCase().includes(f));
+      $('di-paleta').innerHTML = todo.length ? `<div class="chips envolver">${todo.map(chip).join('')}</div>` : '<span class="sec">Nada con ese nombre. Prueba con otra palabra.</span>';
+      return;
+    }
+    const mias = selP.slice(0, 6).map(p => ({ planta: p.id, texto: p.nombre }));
+    $('di-paleta').innerHTML = (mias.length ? `<span class="sec">En tu acuario</span><div class="chips envolver">${mias.map(chip).join('')}</div>` : '')
+      + `<button type="button" class="chip" data-todas aria-expanded="${verTodas}" style="align-self: flex-start">${verTodas ? 'Ocultar la lista' : 'Ver todas'}</button>`
+      + (verTodas ? `<div class="pila paleta-todas" style="gap: 2px">${gruposAgregar(plantas).map(g =>
+        `<details class="plegable" data-grupo="${g.nombre}"${gruposAbiertos.has(g.nombre) ? ' open' : ''}><summary><span class="sec">${g.nombre} (${g.items.length})</span></summary>
+          <div class="chips envolver" style="padding: 4px 0 8px">${g.items.map(chip).join('')}</div></details>`).join('')}</div>` : '');
   }
+  // Recordar qué grupos de "Ver todas" están abiertos (el panel se vuelve a pintar con cada cambio).
+  $('di-paleta').addEventListener('toggle', e => { const g = e.target.dataset?.grupo; if (g) e.target.open ? gruposAbiertos.add(g) : gruposAbiertos.delete(g); }, true);
   $('di-buscar').addEventListener('input', pintarPaleta);
 
   /** Barra de lo elegido: tamaño, voltear, duplicar, borrar. */
@@ -261,6 +269,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     const o = elegido();
     $('di-sel').hidden = !o;
     $('di-ayuda').hidden = !!o;
+    $('di-general').hidden = !!o; // con algo elegido, solo su edición
     $('di-varios').setAttribute('aria-pressed', varios);
     $('di-varios').textContent = varios ? 'Elegir varios: sí' : 'Elegir varios';
     // Sin nada elegido, deslizar sobre el dibujo desplaza la página (o el zoom); con algo elegido, lo mueve.
@@ -346,8 +355,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   };
 
   $('di-paleta').addEventListener('click', e => {
-    if (e.target.closest('[data-mas]')) { paletaCompleta = true; return pintarPaleta(); }
-    if (e.target.closest('[data-menos]')) { paletaCompleta = false; return pintarPaleta(); }
+    if (e.target.closest('[data-todas]')) { verTodas = !verTodas; return pintarPaleta(); }
     const b = e.target.closest('[data-agregar]'); if (!b) return;
     const item = JSON.parse(b.dataset.agregar);
     const { x, b: base } = posicionInicial(item, plantas);
@@ -803,13 +811,15 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     const a = datos.acuario, avisos = avisosDiseno(diseno().objetos, plantas, a.alto);
     if (sustratoMasAlto(diseno().sustrato) > ALTO_AVISO)
       avisos.push(`El sustrato pasa de ${ALTO_AVISO} cm en una zona: ${tipoSustrato(a) === 'aquasoil' ? 'el aquasoil muy alto' : 'la arena muy alta'} se compacta; usa rocas o bolsas de malla para sostenerlo.`);
-    $('di-avisos').innerHTML = avisos.map(x => `<p>${escapar(x)}</p>`).join('');
+    $('di-avisos-lista').innerHTML = avisos.map(x => `<p>${escapar(x)}</p>`).join('');
+    $('di-avisos-t').textContent = `Recomendaciones (${avisos.length})`;
     $('di-avisos').hidden = !avisos.length;
     // Consejos de composición (suaves). La guía de tercios se puede ver mientras haga falta o esté encendida.
     const consejos = consejosComposicion(diseno().objetos, plantas, a.largo), tercios = $('di-vista').classList.contains('tercios');
     const conGuia = consejos.some(c => c.guia) || tercios;
-    $('di-consejos').innerHTML = consejos.length || tercios ? '<b>Consejos de composición</b>' + consejos.map(c => `<p>${escapar(c.texto)}</p>`).join('') +
-      (conGuia ? `<button type="button" class="chip" id="di-tercios" aria-pressed="${tercios}">${tercios ? 'Ocultar guía de tercios' : 'Ver guía de tercios'}</button>` : '') : '';
+    $('di-consejos-t').textContent = `Consejos de composición (${consejos.length})`;
+    $('di-consejos-lista').innerHTML = consejos.map(c => `<p>${escapar(c.texto)}</p>`).join('') +
+      (conGuia ? `<button type="button" class="chip" id="di-tercios" aria-pressed="${tercios}">${tercios ? 'Ocultar guía de tercios' : 'Ver guía de tercios'}</button>` : '');
     $('di-consejos').hidden = !consejos.length && !tercios;
   }
   $('di-consejos').addEventListener('click', e => {
@@ -908,6 +918,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   /** Línea del sustrato en la lista de compras (se actualiza al mover la pendiente). */
   function pintarSustratoCompra() {
     const c = sustratoAComprar(datos.acuario, diseno().sustrato);
+    $('di-compras-t').textContent = resumenCompras(listaCompras(diseno().objetos, plantas), c);
     $('di-sustrato-compra').innerHTML = `<div><b style="width: 22px">·</b><span style="flex: 1">Sustrato · ${escapar(c.nombre)}<br><span class="sec">${c.frente === c.atras ? `${c.frente} cm parejo` : `${c.frente} cm al frente, ${c.atras} cm atrás`} · ~${Math.round(c.litros)} L${c.kg ? ` (≈${Math.round(c.kg)} kg)` : ''} con 10 % extra</span></span><b class="num" style="text-align: right">${escapar(c.bolsas)}</b></div>`;
   }
   $('di-sustratos').addEventListener('click', e => {

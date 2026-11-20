@@ -549,6 +549,23 @@ export function dibujarObjeto(o, ctx) {
         giro(o.rot, espejo !== (voltear < 0)), filtro), o.id)).join('');
 }
 
+/** "Agregar → Ver todas": el catálogo agrupado por tipo (solo los grupos que tienen algo). */
+export function gruposAgregar(catalogo, paisaje = PAISAJE) {
+  const zonas = [['Alfombras', 'primer'], ['Medio', 'medio'], ['Fondo', 'fondo'], ['Sobre rocas', 'epifita'], ['Flotantes', 'flotante']];
+  return [
+    ...zonas.map(([nombre, z]) => ({ nombre, items: catalogo.filter(p => p.zona === z).map(p => ({ planta: p.id, texto: p.nombre })) })),
+    { nombre: 'Rocas', items: paisaje.filter(x => !x.id.startsWith('tronco')).map(x => ({ paisaje: x.id, texto: x.nombre })) },
+    { nombre: 'Troncos', items: paisaje.filter(x => x.id.startsWith('tronco')).map(x => ({ paisaje: x.id, texto: x.nombre })) },
+  ].filter(g => g.items.length);
+}
+
+/** Título de la lista de compras plegada: "Lista de compras · 14 plantas · 33 L de aquasoil". */
+export function resumenCompras(compras, sustrato) {
+  const n = compras.plantas.reduce((t, x) => t + x.cantidad, 0);
+  return ['Lista de compras', n ? `${n} planta${n > 1 ? 's' : ''}` : '', sustrato ? `${Math.round(sustrato.litros)} L de ${sustrato.nombre.toLowerCase()}` : '']
+    .filter(Boolean).join(' · ');
+}
+
 /** Brillo dorado en lo elegido (uno o varios). */
 const resaltar = sel => {
   const ids = [].concat(sel || []);

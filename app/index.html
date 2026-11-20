@@ -85,7 +85,10 @@
   .nota-aviso p { margin: 0 0 4px; } .nota-aviso p:last-child { margin: 0; }
   /* Consejos de composición: sugerencias suaves, no errores. */
   .nota-consejo { background: #15222A; border: 1px solid #2A4452; border-radius: 14px; padding: 12px 14px; color: #CFE2EA; font-size: 13px; }
-  .nota-consejo b { display: block; margin-bottom: 6px; color: #9FD0E3; font-size: 13px; }
+  .nota-consejo b { color: #9FD0E3; font-size: 13px; }
+  .nota-aviso summary b { color: #F2D68A; font-size: 13px; }
+  #di-compras h2 { font-size: 16px; }
+  .paleta-todas details.plegable > summary { padding: 4px 0; }
   .nota-consejo p { margin: 0 0 6px; } .nota-consejo p:last-child { margin: 0; }
   .nota-consejo .chip { margin-top: 2px; }
   /* Guía de tercios en el dibujo del diseñador (no sale en "Guardar imagen"). */
@@ -324,6 +327,8 @@
       </details>
       <button id="di-bloquear" class="btn" type="button">Bloquear (que no se elija al tocar)</button>
     </div>
+    <!-- Lo general: se oculta mientras hay algo elegido (el panel muestra solo su edición). -->
+    <div id="di-general" class="pila">
     <details id="di-bloqueados" class="plegable tarjeta" style="padding: 10px 14px" hidden>
       <summary><h2 id="di-bloqueados-t">Bloqueados</h2></summary>
       <div id="di-bloqueados-lista" class="lista" style="padding-top: 6px"></div>
@@ -332,7 +337,7 @@
     <div class="pila" style="gap: 8px">
       <h2>Agregar</h2>
       <label class="campo"><span class="solo-lector">Buscar planta, roca o tronco</span><input id="di-buscar" type="search" placeholder="Buscar planta, roca o tronco"></label>
-      <div id="di-paleta" class="chips envolver"></div>
+      <div id="di-paleta" class="pila" style="gap: 8px"></div>
       <details class="plegable">
         <summary><h2>Sustrato</h2></summary>
         <div class="pila" style="gap: 8px; padding-top: 8px">
@@ -375,14 +380,18 @@
         </div>
       </div>
     </div>
-    <div id="di-avisos" class="nota-aviso" role="note" hidden></div>
-    <div id="di-consejos" class="nota-consejo" role="note" hidden></div>
-    <div class="pila" style="gap: 8px">
-      <h2>Lista de compras <span class="sec" style="font-weight: 400">· aproximada</span></h2>
-      <div class="tarjeta" style="padding: 4px 14px"><div id="di-leyenda" class="lista"></div><div id="di-sustrato-compra" class="lista" style="border-top: 1px solid var(--linea)"></div></div>
-      <button id="di-copiar" class="btn" type="button">Copiar lista</button>
-    </div>
+    <details id="di-avisos" class="nota-aviso plegable" role="note" hidden><summary><b id="di-avisos-t">Recomendaciones</b></summary><div id="di-avisos-lista" style="padding-top: 6px"></div></details>
+    <details id="di-consejos" class="nota-consejo plegable" role="note" hidden><summary><b id="di-consejos-t">Consejos de composición</b></summary><div id="di-consejos-lista" style="padding-top: 6px"></div></details>
+    <details id="di-compras" class="plegable">
+      <summary><h2 id="di-compras-t">Lista de compras</h2></summary>
+      <div class="pila" style="gap: 8px; padding-top: 8px">
+        <span class="sec">Cantidades aproximadas.</span>
+        <div class="tarjeta" style="padding: 4px 14px"><div id="di-leyenda" class="lista"></div><div id="di-sustrato-compra" class="lista" style="border-top: 1px solid var(--linea)"></div></div>
+        <button id="di-copiar" class="btn" type="button">Copiar lista</button>
+      </div>
+    </details>
     <button id="di-imagen" class="btn" type="button">Guardar imagen</button>
+    </div>
     </div>
     </div>
   </section>
