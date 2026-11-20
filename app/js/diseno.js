@@ -41,6 +41,8 @@ export const seccionesPara = largo => Math.min(6, Math.max(3, Math.round(largo /
 export const clave = (plano, i) => `${plano}-${i}`;
 const escapar = s => String(s).replace(/[&<>"']/g, ch => `&#${ch.charCodeAt(0)};`);
 export const esAlfombra = p => p.zona === 'primer' || p.zona === 'flotante';
+/** Alfombra real (Cuba, Monte Carlo…): se dibuja como tapiz. Las de primer plano con forma "mata" (Staurogyne…) se dibujan como matas. */
+export const esTapiz = p => p.forma ? p.forma === 'tapiz' : p.zona === 'primer';
 /** Plano según la profundidad: sirve para avisos, autocompletar y el ancho de las copias. */
 export const planoDe = b => { const d = profundidad(b); return d < 0.265 ? 'fondo' : d < 0.59 ? 'medio' : 'frente'; };
 /** Perspectiva: lo de adelante se ve un poco más chico (1 al fondo, 0.85 al frente). */
@@ -256,9 +258,11 @@ function azar(semilla) {
  */
 export function copiasVariadas(planta, plano, semilla, centro, anchoSec, cuantas) {
   const r = azar(semilla + planta.id);
-  const alfombra = esAlfombra(planta), tapiz = planta.zona === 'primer';
-  const n = cuantas || (alfombra ? 3 : plano === 'fondo' ? 4 : 3); // el usuario puede elegir de 1 a 8
+  const tapiz = esTapiz(planta), alfombra = tapiz || planta.zona === 'flotante', mata = planta.forma === 'mata';
+  const n = cuantas || (alfombra || mata ? 3 : plano === 'fondo' ? 4 : 3); // el usuario puede elegir de 1 a 8
   const copias = Array.from({ length: n }, (_, k) => {
+    if (mata) return { // grupito: plantas más angostas, poco separadas, cada una se distingue
+      dx: anchoSec * ((k - (n - 1) / 2) * 0.5 + (r() - 0.5) * 0.06), w: anchoSec * (0.55 + r() * 0.15), f: 0.8 + r() * 0.25, espejo: r() < 0.5 };
     const dx = tapiz
       ? anchoSec * ((k - (n - 1) / 2) * 0.34 + (r() - 0.5) * 0.1)  // alfombra: bien encimadas, que no se vea la repetición
       : alfombra
@@ -283,16 +287,16 @@ export function copiasVariadas(planta, plano, semilla, centro, anchoSec, cuantas
  */
 export const OLAS = [0, 1, 2].map(k => {
   const r = azar(`ola${k}`), pts = [];
-  for (let x = 0; x <= 100; x += 7 + r() * 6) pts.push([x, 4 + r() * 24]);
-  pts.push([100, 4 + r() * 24]);
+  for (let x = 0; x <= 100; x += 7 + r() * 6) pts.push([x, 3 + r() * 11]);
+  pts.push([100, 3 + r() * 11]);
   let d = `M0 100L0 ${pts[0][1].toFixed(1)}`;
   for (let i = 1; i < pts.length; i++) { // curvas suaves por los puntos medios
     const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
     d += `Q${x0.toFixed(1)} ${y0.toFixed(1)} ${((x0 + x1) / 2).toFixed(1)} ${((y0 + y1) / 2).toFixed(1)}`;
   }
   d += `L100 ${pts.at(-1)[1].toFixed(1)}L100 100Z`;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="46">` +
-    `<stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".45" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff"/></linearGradient></defs><path d="${d}" fill="url(#g)"/></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="15">` +
+    `<stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".6"/><stop offset="1" stop-color="#fff"/></linearGradient></defs><path d="${d}" fill="url(#g)"/></svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 });
 
@@ -519,11 +523,11 @@ export function dibujarObjeto(o, ctx) {
   }
   const p = catalogo.find(x => x.id === o.planta); if (!p) return '';
   // Alfombras: manda el ancho (cubrir sin islitas); la altura sale de la proporción de la imagen.
-  const alfombra = esAlfombra(p);
-  const h = alfombra ? 40 : Math.min(85, Math.max(7, p.altura[1] / alto * 100)) * esc;
+  const alfombra = esAlfombra(p), plana = esTapiz(p) || p.zona === 'flotante'; // plana: la altura sale de su imagen
+  const h = plana ? 40 : Math.min(85, Math.max(7, p.altura[1] / alto * 100)) * esc;
   const color = p.rojo ? '#C4553F' : '#3E9B58';
   const z = ap.z + (alfombra && !ap.unido ? 2 : 0) + orden;
-  if (p.zona === 'primer' && !ap.unido) {
+  if (esTapiz(p) && !ap.unido) {
     // Alfombra o pasto: cada copia apoya en la altura del sustrato en su punto (malla), alto según la proporción de su imagen,
     // con el borde de arriba ondulado y difuminado y los lados suaves (clase "alf"). Una alfombra cubre el piso: se dibuja
     // en tres filas hacia el frente (hasta ~5 cm más adelante), así no queda una franja de tierra entre alfombras.
@@ -538,7 +542,7 @@ export function dibujarObjeto(o, ctx) {
     })).join('');
   }
   const filtro = filtroColor(o.color, profundidad((soporteDe(o, ctx.objetos || []) || o).b), ctx.profundidad !== false); // unida: la profundidad de su roca
-  return (alfombra || ap.unido ? '' : sombra(ap.x, anchoSec * (o.escala || 1) * 1.1, ap.y, z, o.id)) +
+  return (plana || ap.unido ? '' : sombra(ap.x, anchoSec * (o.escala || 1) * 1.1, ap.y, z, o.id)) +
     copiasVariadas(p, ap.unido ? 'medio' : planoDe(o.b), o.id, ap.x, anchoSec * (o.escala || 1), o.copias).map(({ dx, w, f, espejo }, n) =>
       imagen(`img/plantas/${p.id}.png`, n ? '' : p.nombre, color,
         conFiltro(`left:${ap.x + dx * voltear - w / 2}%;width:${w}%;bottom:${abajo}%;height:${h * f}%;z-index:${z}` +
@@ -669,7 +673,7 @@ export function plantilla(estilo, plantas, { largo = 100, alto = 45 } = {}, cata
     const verdes = papel(tallos.filter(p => !p.rojo && p.tallo), ['rotala-green']);
     const arbustos = papel(medios.filter(p => p.rojo), ['alternanthera']);
     const helechos = papel(epifitas.filter(p => p.id.startsWith('helecho')).concat(epifitas.filter(p => !p.id.startsWith('helecho'))), ['helecho-narrow', 'helecho-java']);
-    const tapiz = papel(alfombras.filter(p => p.zona === 'primer'), ['hc-cuba']);
+    const tapiz = papel(alfombras.filter(esTapiz), ['hc-cuba']);
     const tronco = obj({ paisaje: 'tronco-dragon', x: 37, b: 85, escala: 1.3, espejo: true, rot: 0 }); out.push(tronco); // a un tercio, no al centro
     roca('roca-negra', 21, 90, 0.7, 0); roca('roca-negra', 31, 91.5, 0.45, 1); roca('roca-negra', 72, 90.5, 0.65, 1);
     const atras = [[6, 0], [17, 1], [28, 0], [46, -1], [56, -1], [70, 2], [82, 2], [94, 1]]; // [x, cuál rojo] (-1 = verde)
