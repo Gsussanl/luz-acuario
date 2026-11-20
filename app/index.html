@@ -83,6 +83,14 @@
   .datos span { font-size: 11px; color: var(--sec); }
   .nota-aviso { background: #2A2416; border: 1px solid #5A4A22; border-radius: 14px; padding: 12px 14px; color: #F1E3C0; font-size: 13px; }
   .nota-aviso p { margin: 0 0 4px; } .nota-aviso p:last-child { margin: 0; }
+  /* Consejos de composición: sugerencias suaves, no errores. */
+  .nota-consejo { background: #15222A; border: 1px solid #2A4452; border-radius: 14px; padding: 12px 14px; color: #CFE2EA; font-size: 13px; }
+  .nota-consejo b { display: block; margin-bottom: 6px; color: #9FD0E3; font-size: 13px; }
+  .nota-consejo p { margin: 0 0 6px; } .nota-consejo p:last-child { margin: 0; }
+  .nota-consejo .chip { margin-top: 2px; }
+  /* Guía de tercios en el dibujo del diseñador (no sale en "Guardar imagen"). */
+  #di-vista.tercios .vista-frontal::after { content: ''; position: absolute; inset: 0; z-index: 2995; pointer-events: none;
+    background: linear-gradient(90deg, transparent calc(33.33% - 1px), rgba(255,255,255,.35) calc(33.33% - 1px) calc(33.33% + 1px), transparent calc(33.33% + 1px) calc(66.67% - 1px), rgba(255,255,255,.35) calc(66.67% - 1px) calc(66.67% + 1px), transparent calc(66.67% + 1px)); }
   .progreso { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .progreso span { height: 4px; border-radius: 2px; background: var(--linea); }
   .progreso span.hecho { background: var(--texto); }
@@ -368,6 +376,7 @@
       </div>
     </div>
     <div id="di-avisos" class="nota-aviso" role="note" hidden></div>
+    <div id="di-consejos" class="nota-consejo" role="note" hidden></div>
     <div class="pila" style="gap: 8px">
       <h2>Lista de compras <span class="sec" style="font-weight: 400">· aproximada</span></h2>
       <div class="tarjeta" style="padding: 4px 14px"><div id="di-leyenda" class="lista"></div><div id="di-sustrato-compra" class="lista" style="border-top: 1px solid var(--linea)"></div></div>

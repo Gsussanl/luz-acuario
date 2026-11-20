@@ -148,9 +148,35 @@ export function avisosDiseno(objetos, catalogo, alto) {
     if (plano === 'frente' && p.altura[1] > alto * 0.35) avisos.add(`${p.nombre} crece hasta ${p.altura[1]} cm: al frente va a tapar lo de atrás.`);
     if (plano === 'fondo' && p.altura[1] <= 5) avisos.add(`${p.nombre} es muy baja para el fondo: no se va a ver.`);
     if (p.zona === 'epifita' && !soporteDe(o, objetos)) avisos.add(`${p.nombre} se amarra a roca o tronco: elígela y toca "Unir a roca o tronco".`);
-    if (tallosPelones(o, p, objetos, catalogo)) avisos.add(`${p.nombre} deja ver abajo sus tallos sin hojas: pon delante una planta media (Alternanthera, Cryptocoryne…) o una roca.`);
   }
   return [...avisos];
+}
+
+/**
+ * Consejos de composición: avisos suaves (no errores), solo cuando aplican. Cada uno: { texto, guia } (guia: ofrece la guía de tercios).
+ */
+export function consejosComposicion(objetos, catalogo, largo = 100) {
+  const consejos = [];
+  const piezas = objetos.filter(o => o.paisaje && PAISAJE.some(x => x.id === o.paisaje));
+  if (piezas.length === 1 && largo > 60)
+    consejos.push({ texto: `Una sola roca o tronco en un acuario de más de 60 cm: prueba 3 o 5, de tamaños distintos, en triángulo.` });
+  const tamano = o => { const pa = PAISAJE.find(x => x.id === o.paisaje); return pa.ancho * pa.alto * (o.escala || 1) ** 2; };
+  const principal = piezas.reduce((a, o) => !a || tamano(o) > tamano(a) ? o : a, null);
+  if (principal && Math.abs(principal.x - 50) < 10)
+    consejos.push({ texto: 'Tu pieza principal está al centro: muévela a un tercio del largo para un paisaje más natural.', guia: true });
+  const de = o => catalogo.find(x => x.id === o.planta);
+  const rojas = new Set(objetos.filter(o => de(o)?.rojo).map(o => o.planta));
+  if (rojas.size > 3)
+    consejos.push({ texto: `Muchas plantas rojas distintas juntas (${rojas.size}): deja 2 o 3 y pon verdes entre ellas para que resalten.` });
+  // Esquinas: qué hay en el cuarto izquierdo y en el derecho (especies, rocas y troncos). Si es casi lo mismo, se ve simétrico.
+  const esquina = f => new Set(objetos.filter(o => f(o.sobre ? objetos.find(r => r.id === o.sobre.id)?.x ?? o.x : o.x)).map(o => o.planta || o.paisaje.split('-')[0]));
+  const izq = esquina(x => x < 25), der = esquina(x => x > 75);
+  const comunes = [...izq].filter(k => der.has(k)).length, todas = new Set([...izq, ...der]).size;
+  if (izq.size >= 2 && der.size >= 2 && comunes / todas >= 0.75)
+    consejos.push({ texto: 'Las dos esquinas son casi iguales: cambia una para que no se vea simétrico.' });
+  const pelonas = new Set(objetos.filter(o => tallosPelones(o, de(o), objetos, catalogo)).map(o => de(o).nombre));
+  for (const n of pelonas) consejos.push({ texto: `${n} deja ver abajo sus tallos sin hojas: pon delante una planta media (Alternanthera, Cryptocoryne…) o una roca.` });
+  return consejos;
 }
 
 /**

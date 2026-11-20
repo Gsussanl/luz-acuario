@@ -2,7 +2,7 @@
 // solo le pasa al módulo de luz "usa esta mezcla" o "usa estas horas" cuando el usuario lo pide.
 import { recomendar, horasDeArranque, avisosDeGrupo } from '../../datos/recomendar.js';
 import { PAISAJE, seccionesPara, autocompletar, celdasAObjetos, nuevoId, posicionInicial, numerar, avisosDiseno, vistaFrontal, plantilla, PLANTILLAS, vistaSuperior, listaCompras, esAlfombra, PERFILES, archivoPaisaje, SUSTRATOS, tipoSustrato, sustratoAComprar, granos, TEXTURA_CM, aplicarMatriz, OLAS,
-  aV3, mallaDesde, suavizar, apoyo, sobreDesdePunto, dibujarObjeto, soporteDe, bDe, profundidad, planoDe, MALLA, ALTO_MIN, ALTO_AVISO, altoMax, sustratoMasAlto } from './diseno.js';
+  aV3, mallaDesde, suavizar, consejosComposicion, apoyo, sobreDesdePunto, dibujarObjeto, soporteDe, bDe, profundidad, planoDe, MALLA, ALTO_MIN, ALTO_AVISO, altoMax, sustratoMasAlto } from './diseno.js';
 
 const CLAVE = 'acuario';
 const TIPOS = { co2: 'Plantado con CO₂', 'sin-co2': 'Plantado sin CO₂', peces: 'Solo peces' };
@@ -195,7 +195,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   function abrirDisenador() {
     $('disenador').hidden = false; $('nav').hidden = true;
     document.querySelectorAll('main > section[id^="tab-"]').forEach(s => { s.hidden = true; });
-    elegir(null); varios = false; editandoMalla = false; puntos = new Set(); pintarDisenador(); ponerZoom(1); scrollTo(0, 0);
+    elegir(null); varios = false; editandoMalla = false; puntos = new Set(); $('di-vista').classList.remove('tercios'); pintarDisenador(); ponerZoom(1); scrollTo(0, 0);
   }
   function pintarDisenador() {
     const { objetos } = diseno(), { selP } = seleccion(), numeros = numerar(objetos);
@@ -805,7 +805,17 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
       avisos.push(`El sustrato pasa de ${ALTO_AVISO} cm en una zona: ${tipoSustrato(a) === 'aquasoil' ? 'el aquasoil muy alto' : 'la arena muy alta'} se compacta; usa rocas o bolsas de malla para sostenerlo.`);
     $('di-avisos').innerHTML = avisos.map(x => `<p>${escapar(x)}</p>`).join('');
     $('di-avisos').hidden = !avisos.length;
+    // Consejos de composición (suaves). La guía de tercios se puede ver mientras haga falta o esté encendida.
+    const consejos = consejosComposicion(diseno().objetos, plantas, a.largo), tercios = $('di-vista').classList.contains('tercios');
+    const conGuia = consejos.some(c => c.guia) || tercios;
+    $('di-consejos').innerHTML = consejos.length || tercios ? '<b>Consejos de composición</b>' + consejos.map(c => `<p>${escapar(c.texto)}</p>`).join('') +
+      (conGuia ? `<button type="button" class="chip" id="di-tercios" aria-pressed="${tercios}">${tercios ? 'Ocultar guía de tercios' : 'Ver guía de tercios'}</button>` : '') : '';
+    $('di-consejos').hidden = !consejos.length && !tercios;
   }
+  $('di-consejos').addEventListener('click', e => {
+    if (!e.target.closest('#di-tercios')) return;
+    $('di-vista').classList.toggle('tercios'); pintarAvisos();
+  });
   // ---------- Forma del sustrato ----------
   function pintarArriba() {
     $('di-arriba').innerHTML = vistaSuperior({ acuario: datos.acuario, objetos: diseno().objetos, catalogo: plantas, seleccion: [...grupo],
