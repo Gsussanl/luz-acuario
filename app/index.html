@@ -211,6 +211,9 @@
     .di-der { position: sticky; top: 12px; max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
   }
   /* PC: nombre de la planta al pasar el mouse. */
+  /* Con algo elegido, del panel general solo queda la vista de arriba (ahí también se elige y se mueve). */
+  #di-general.editando > :not(#di-arriba-bloque) { display: none; }
+  html.inmersivo #di-general.editando { display: none; }
   .nombre-hover { position: fixed; z-index: 90; pointer-events: none; background: rgba(14,17,20,.92); border: 1px solid var(--linea); border-radius: 8px; padding: 3px 8px; font-size: 12px; white-space: nowrap; }
   /* Celular acostado (poco alto): el dibujo ocupa el alto disponible y las herramientas van en un panel que se desplaza. */
   @media (orientation: landscape) and (max-height: 520px) {
@@ -427,7 +430,7 @@
         <button id="di-vaciar" class="btn" type="button">Vaciar</button>
       </div>
     </div>
-    <div class="pila" style="gap: 8px">
+    <div id="di-arriba-bloque" class="pila" style="gap: 8px">
       <h2>Vista desde arriba <span class="sec" style="font-weight: 400">· toca una mancha para elegirla</span></h2>
       <div id="di-arriba"></div>
       <div id="di-malla" class="tarjeta pila" style="gap: 10px; padding: 12px 14px" hidden>

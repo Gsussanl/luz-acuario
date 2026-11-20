@@ -316,7 +316,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     const o = elegido();
     $('di-sel').hidden = !o;
     $('di-ayuda').hidden = !!o;
-    $('di-general').hidden = !!o; // con algo elegido, solo su edición
+    $('di-general').classList.toggle('editando', !!o); // con algo elegido, solo su edición (y la vista de arriba)
     pintarCambiar();
     // Pantalla completa: tocar algo abre su tarjeta de edición; soltarlo la cierra.
     if (o && !poniendo) panelInm = 'editar'; else if (!o && panelInm === 'editar') panelInm = '';

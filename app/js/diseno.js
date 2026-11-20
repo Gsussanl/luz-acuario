@@ -784,6 +784,9 @@ const tonoAltura = (h, min, max) => {
   return `rgb(${c(48, 222)},${c(44, 206)},${c(40, 176)})`;
 };
 
+/** Vista de arriba: ancho (radio, en cm) desde el que una mancha lleva su número. */
+const MANCHA_CON_NUMERO = 6.5;
+
 /**
  * Vista desde arriba (SVG en cm): el fondo arriba, el frente abajo. Tocar una mancha elige el objeto.
  * Con malla = { elegidos }: se edita la forma del sustrato (mapa de alturas con sus puntos; los objetos quedan tenues).
@@ -794,12 +797,21 @@ export function vistaSuperior({ acuario, objetos, catalogo, seleccion = [], sust
   const ctx = { largo, alto, sustrato, objetos };
   const prof = o => bEfectiva(o, objetos); // lo unido a una roca o tronco va a la profundidad de su soporte
   const orden = [...objetos].sort((a, b) => !!a.planta - !!b.planta || prof(a) - prof(b)); // primero rocas y troncos, luego plantas
+  // Lo elegido (uno solo) lleva su nombre encima, para saber qué es sin abrir nada.
+  let nombre = '';
+  const rotular = (o, x, y, texto) => {
+    if (elegidos.size !== 1 || !elegidos.has(o.id)) return;
+    nombre = `<text class="rotulo" x="${limitar(x, 12, largo - 12)}" y="${Math.max(2.5, y)}" font-size="3.4" text-anchor="middle" fill="#fff" stroke="#0E1114" stroke-width=".9" paint-order="stroke" style="pointer-events:none">${escapar(texto)}</text>`;
+  };
   const formas = orden.map(o => {
     const x = (o.sobre ? apoyo(o, ctx).x : o.x) / 100 * largo, y = profundidadCm(prof(o), ancho), e = o.escala || 1;
-    const borde = elegidos.has(o.id) ? ' stroke="#F2B544" stroke-width="1.2"' : ' stroke="rgba(0,0,0,.35)" stroke-width=".4"';
+    // Elegido: borde dorado; bloqueado: borde punteado.
+    const borde = elegidos.has(o.id) ? ' stroke="#F2B544" stroke-width="1.2"'
+      : o.bloqueado ? ' stroke="#F1E3C0" stroke-width=".6" stroke-dasharray="1.4 1"' : ' stroke="rgba(0,0,0,.35)" stroke-width=".4"';
     if (o.paisaje) {
       const pa = PAISAJE.find(z => z.id === o.paisaje); if (!pa) return '';
       const L = pa.ancho * 20 * e;
+      rotular(o, x, y - L / 3.6 - 1.5, pa.nombre);
       if (pa.id.startsWith('tronco')) // un tronco desde arriba: una barra larga, girada como en el frente
         return `<rect data-o="${o.id}" x="${x - L / 2}" y="${y - 2.5}" width="${L}" height="5" rx="2.5" fill="#6B4A32" transform="rotate(${o.rot || 0} ${x} ${y})"${borde}><title>${escapar(pa.nombre)}</title></rect>`;
       return `<ellipse data-o="${o.id}" cx="${x}" cy="${y}" rx="${L / 2.4}" ry="${L / 3.6}" fill="${pa.id === 'roca-dragon' ? '#9A7B52' : pa.id === 'roca-negra' ? '#3B3E42' : '#7C858C'}"${borde}><title>${escapar(pa.nombre)}</title></ellipse>`;
@@ -807,9 +819,13 @@ export function vistaSuperior({ acuario, objetos, catalogo, seleccion = [], sust
     const p = catalogo.find(z => z.id === o.planta); if (!p) return '';
     const rx = 10 * e * (esAlfombra(p) ? 1 : 0.8) * (o.sobre ? 0.6 : 1), ry = (esAlfombra(p) ? 5 : 4.5) * e * (o.sobre ? 0.6 : 1);
     const color = p.rojo ? '#B5483A' : esAlfombra(p) ? '#7CC46A' : '#4E9B4F';
-    return `<g data-o="${o.id}"><ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${color}" fill-opacity=".85"${borde}/>` +
-      `<text x="${x}" y="${y + 1.4}" font-size="4" text-anchor="middle" fill="#fff" style="pointer-events:none">${numeros[p.id]}</text><title>${escapar(p.nombre)}</title></g>`;
-  }).join('');
+    rotular(o, x, y - ry - 1.2, p.nombre);
+    // El número solo en las manchas grandes; en las chicas, un punto (con muchas plantas los números se enciman).
+    const marca = rx >= MANCHA_CON_NUMERO
+      ? `<text x="${x}" y="${y + 1.4}" font-size="4" text-anchor="middle" fill="#fff" style="pointer-events:none">${numeros[p.id]}</text>`
+      : `<circle cx="${x}" cy="${y}" r=".8" fill="#fff" style="pointer-events:none"/>`;
+    return `<g data-o="${o.id}"><ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${color}" fill-opacity=".85"${borde}/>${marca}<title>${escapar(p.nombre)}</title></g>`;
+  }).join('') + nombre;
   let mapa = '', puntos = '';
   if (malla) {
     const m = sustrato?.malla || mallaDesde(sustrato, alto), min = Math.min(...m.cm), max = Math.max(...m.cm);
