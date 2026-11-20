@@ -277,6 +277,24 @@ function imagen(ruta, nombre, color, estilo, id, ola) {
     onerror="const d=document.createElement('div');d.className='falta-img';d.textContent=this.dataset.nombre;d.setAttribute('style',this.getAttribute('style')+';--c:'+this.dataset.color);d.dataset.o=this.dataset.o;this.replaceWith(d)">`;
 }
 
+/**
+ * Color de cada cosa como filtro CSS: lo que el usuario eligió (Color = saturación 50–150 %, Brillo 60–120 %, Tono −20° a +20°)
+ * y, si la profundidad está encendida, lo de atrás un poco más oscuro y menos saturado (hasta −12 % brillo y −15 % color al fondo).
+ * d: 0 = atrás, 1 = frente. Devuelve '' si no cambia nada.
+ */
+export function filtroColor(color, d, conProfundidad = true) {
+  const atras = conProfundidad ? 1 - limitar(d, 0, 1) : 0;
+  const sat = limitar(color?.sat ?? 100, 50, 150) / 100 * (1 - 0.15 * atras);
+  const brillo = limitar(color?.brillo ?? 100, 60, 120) / 100 * (1 - 0.12 * atras);
+  const tono = limitar(color?.tono ?? 0, -20, 20);
+  const f = [];
+  if (Math.abs(sat - 1) > 0.004) f.push(`saturate(${sat.toFixed(3)})`);
+  if (Math.abs(brillo - 1) > 0.004) f.push(`brightness(${brillo.toFixed(3)})`);
+  if (tono) f.push(`hue-rotate(${tono}deg)`);
+  return f.join(' ');
+}
+const conFiltro = (estilo, f) => f ? `${estilo};--f:${f}` : estilo;
+
 /** Alfombras: profundidades extra (hacia el frente) donde se repiten sus copias para cubrir el piso. */
 const FILAS_ALFOMBRA = [0, 0.06, 0.12];
 /** Orden de dibujo: lo de más adelante va delante. A la misma profundidad: plantas detrás, rocas y troncos delante, alfombras delante de la base de la roca. */
@@ -471,7 +489,7 @@ export function dibujarObjeto(o, ctx) {
     const detras = `<div class="sombra" data-s="${o.id}" style="left:${o.x - w * 0.65}%;width:${w * 1.3}%;bottom:${abajo - 1.5}%;height:${h * 1.1}%;z-index:${z - 1};opacity:.55"></div>`;
     const contacto = `<div class="sombra" data-s="${o.id}" style="left:${o.x - w * 0.36}%;width:${w * 0.72}%;bottom:${abajo - 0.7}%;height:1.8%;z-index:${z - 1};opacity:.85"></div>`;
     return detras + sombra(o.x, w * 0.9, ap.y, z, o.id) + contacto + imagen(archivoPaisaje(pa, o.v || 0), pa.nombre, '#7A6A5A',
-      `left:${o.x - w / 2}%;width:${w}%;bottom:${abajo}%;height:${h}%;z-index:${z}` + giro(o.rot, voltear < 0), o.id);
+      conFiltro(`left:${o.x - w / 2}%;width:${w}%;bottom:${abajo}%;height:${h}%;z-index:${z}` + giro(o.rot, voltear < 0), filtroColor(o.color, profundidad(o.b), ctx.profundidad !== false)), o.id);
   }
   const p = catalogo.find(x => x.id === o.planta); if (!p) return '';
   // Alfombras: manda el ancho (cubrir sin islitas); la altura sale de la proporción de la imagen.
@@ -489,21 +507,22 @@ export function dibujarObjeto(o, ctx) {
       const b = bDe(Math.min(1, d0 + fd)), xc = ap.x + (dx + i % 2 * anchoSec * 0.17) * voltear;
       const yc = Math.min(100, yArena(ctx.sustrato, limitar(xc, 0, 100), b, alto) + dy), fc = f * (1 - 0.07 * i);
       return imagen(`img/plantas/${p.id}.png`, i || n ? '' : p.nombre, color,
-        `left:${xc - w / 2}%;width:${w}%;bottom:${100 - yc}%;height:${w * prop * largo / alto * fc}%;z-index:${capa(b, 2) + orden};--m:var(--ola${(ola + i) % OLAS.length})` +
-        giro(o.rot, (espejo !== (i % 2 === 1)) !== (voltear < 0)), o.id, (ola + i) % OLAS.length);
+        conFiltro(`left:${xc - w / 2}%;width:${w}%;bottom:${100 - yc}%;height:${w * prop * largo / alto * fc}%;z-index:${capa(b, 2) + orden};--m:var(--ola${(ola + i) % OLAS.length})` +
+        giro(o.rot, (espejo !== (i % 2 === 1)) !== (voltear < 0)), filtroColor(o.color, profundidad(b), ctx.profundidad !== false)), o.id, (ola + i) % OLAS.length);
     })).join('');
   }
+  const filtro = filtroColor(o.color, profundidad((soporteDe(o, ctx.objetos || []) || o).b), ctx.profundidad !== false); // unida: la profundidad de su roca
   return (alfombra || ap.unido ? '' : sombra(ap.x, anchoSec * (o.escala || 1) * 1.1, ap.y, z, o.id)) +
     copiasVariadas(p, ap.unido ? 'medio' : planoDe(o.b), o.id, ap.x, anchoSec * (o.escala || 1), o.copias).map(({ dx, w, f, espejo }, n) =>
       imagen(`img/plantas/${p.id}.png`, n ? '' : p.nombre, color,
-        `left:${ap.x + dx * voltear - w / 2}%;width:${w}%;bottom:${abajo}%;height:${h * f}%;z-index:${z}` +
-        giro(o.rot, espejo !== (voltear < 0)), o.id)).join('');
+        conFiltro(`left:${ap.x + dx * voltear - w / 2}%;width:${w}%;bottom:${abajo}%;height:${h * f}%;z-index:${z}` +
+        giro(o.rot, espejo !== (voltear < 0)), filtro), o.id)).join('');
 }
 
 /** Brillo dorado en lo elegido (uno o varios). */
 const resaltar = sel => {
   const ids = [].concat(sel || []);
-  return ids.length ? `<style>${ids.map(id => `.vista-frontal [data-o="${id}"]`).join(',')}{filter:drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 3px #F2B544)}</style>` : '';
+  return ids.length ? `<style>${ids.map(id => `.vista-frontal [data-o="${id}"]`).join(',')}{filter:var(--f,) drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 3px #F2B544)}</style>` : '';
 };
 
 /**
@@ -525,7 +544,7 @@ export function vistaFrontal({ acuario, diseno, catalogo, colores, seleccion, ca
   const objetos = objetosDe(diseno, catalogo, alto, largo);
   const sustrato = diseno?.sustrato;
   const brillo = Math.max(...colores) / 100;
-  const ctx = { largo, alto, catalogo, sustrato, objetos };
+  const ctx = { largo, alto, catalogo, sustrato, objetos, profundidad: diseno?.profundidad !== false };
   const capas = objetos.map(o => dibujarObjeto(o, ctx)).join('') + (candados ? objetos.filter(o => o.bloqueado).map(o => {
     const ap = apoyo(o, ctx);
     return `<div class="candado" style="left:${ap.x}%;bottom:${100 - ap.y + 0.5}%" title="Bloqueado">${CANDADO}</div>`;

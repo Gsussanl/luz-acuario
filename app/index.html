@@ -100,6 +100,9 @@
   .vista-frontal img, .vista-frontal .falta-img { position: absolute; object-fit: contain; object-position: bottom; }
   .vista-frontal .falta-img { box-sizing: border-box; border: 1px dashed color-mix(in srgb, var(--c) 70%, #fff); background: color-mix(in srgb, var(--c) 35%, transparent);
     border-radius: 40% 40% 6px 6px; color: #EEF1F3; font-size: clamp(8px, 2.2vw, 11px); display: flex; align-items: flex-end; justify-content: center; text-align: center; padding: 3px; overflow: hidden; line-height: 1.1; }
+  /* Color de cada cosa (lo elegido y la profundidad): un filtro en la variable --f. */
+  .vista-frontal [data-o] { filter: var(--f, none); }
+  #di-profundidad[aria-pressed="true"] { border-color: var(--sol); color: var(--sol); }
   /* Alfombras: la imagen llena su caja (alto según su proporción) y la máscara da el borde ondulado arriba y suave a los lados. */
   .vista-frontal img.alf { object-fit: fill; -webkit-mask-image: var(--m), linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
     mask-image: var(--m), linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
@@ -125,7 +128,7 @@
   .vista-frontal .barra-luz { position: absolute; left: 0; right: 0; top: 0; height: 2.5%; z-index: 3001; pointer-events: none; background: #FFF6E6; }
   .tanque .filtro-luz { position: absolute; width: 0; height: 0; }
   .vista-frontal .vacio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--sec); font-size: 13px; z-index: 3002; pointer-events: none; }
-  #di-sel input[type=range], #di-pendiente, #di-frente-alto, #di-malla-alto { accent-color: var(--sol); }
+  #di-sel input[type=range], #di-color input[type=range], #di-pendiente, #di-frente-alto, #di-malla-alto { accent-color: var(--sol); }
   .vista-superior.editando { touch-action: none; }
   .vista-superior { width: 100%; display: block; border-radius: 10px; background: #12181D; }
   .vista-superior [data-o] { cursor: pointer; }
@@ -299,6 +302,18 @@
         <button id="di-varios" class="btn" type="button" aria-pressed="false">Elegir varios</button>
         <button id="di-especie" class="btn" type="button">Toda la especie</button>
       </div>
+      <details id="di-color" class="plegable">
+        <summary><span class="sec">Color, brillo y tono</span></summary>
+        <div class="pila" style="gap: 8px; padding-top: 8px">
+          <label class="pila" style="gap: 4px"><span class="sec">Color · <span id="di-sat-v" class="num">100 %</span></span>
+            <input id="di-sat" type="range" min="50" max="150" step="5" value="100" aria-label="Color (saturación)"></label>
+          <label class="pila" style="gap: 4px"><span class="sec">Brillo · <span id="di-brillo-v" class="num">100 %</span></span>
+            <input id="di-brillo" type="range" min="60" max="120" step="5" value="100" aria-label="Brillo"></label>
+          <label class="pila" style="gap: 4px"><span class="sec">Tono · <span id="di-tono-v" class="num">0°</span></span>
+            <input id="di-tono" type="range" min="-20" max="20" step="1" value="0" aria-label="Tono"></label>
+          <button id="di-color-0" class="btn" type="button">Color original</button>
+        </div>
+      </details>
       <button id="di-bloquear" class="btn" type="button">Bloquear (que no se elija al tocar)</button>
     </div>
     <details id="di-bloqueados" class="plegable tarjeta" style="padding: 10px 14px" hidden>
@@ -327,6 +342,7 @@
         <summary><h2>Empezar con un estilo</h2></summary>
         <div id="di-plantillas" class="chips envolver" style="padding-top: 8px"></div>
       </details>
+      <button id="di-profundidad" class="btn" type="button" aria-pressed="true">Profundidad: lo de atrás más oscuro</button>
       <div class="fila">
         <button id="di-auto" class="btn" type="button">Autocompletar</button>
         <button id="di-vaciar" class="btn" type="button">Vaciar</button>

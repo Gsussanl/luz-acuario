@@ -211,6 +211,8 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     $('di-sustratos').innerHTML = Object.entries(SUSTRATOS).map(([id, x]) => `<button type="button" class="chip planta" data-sustrato="${id}" aria-pressed="${tipo === id}">${x.nombre}</button>`).join('');
     pintarBarra();
     pintarPaleta();
+    $('di-profundidad').setAttribute('aria-pressed', diseno().profundidad !== false);
+    $('di-profundidad').textContent = diseno().profundidad !== false ? 'Profundidad: lo de atrás más oscuro' : 'Profundidad: apagada';
     if (acostado.matches && sel && sel !== ultimoSel) $('di-panel').scrollTop = 0; // al elegir algo, sus controles arriba del panel flotante
     ultimoSel = sel;
 
@@ -286,6 +288,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     if (p) { const n = o.copias || (esAlfombra(p) ? 3 : !o.sobre && planoDe(o.b) === 'fondo' ? 4 : 3); $('di-copias').value = n; $('di-copias-v').textContent = n; }
     $('di-giro').value = o.rot || 0;
     $('di-giro-v').textContent = `${o.rot || 0}°`;
+    pintarColor(o);
   }
   const cambiar = fn => { const lista = elegidos(); if (!lista.length) return; lista.forEach(fn); guardar(); pintarDisenador(); };
 
@@ -376,6 +379,33 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     dibujar('di-vista', colorVista(), [...grupo]);
   };
   $('di-copias').onchange = () => { guardar(); pintarDisenador(); };
+  // Color de lo elegido (uno, varios o toda la especie): Color = saturación, Brillo y Tono. Se guarda en o.color.
+  const COLOR = { sat: [100, v => `${v} %`], brillo: [100, v => `${v} %`], tono: [0, v => `${v > 0 ? '+' : ''}${v}°`] };
+  function pintarColor(o) {
+    for (const [k, [base, texto]] of Object.entries(COLOR)) {
+      const v = o.color?.[k] ?? base; $(`di-${k}`).value = v; $(`di-${k}-v`).textContent = texto(v);
+    }
+  }
+  for (const [k, [base, texto]] of Object.entries(COLOR)) {
+    $(`di-${k}`).oninput = e => {
+      if (!grupo.size) return;
+      const v = +e.target.value;
+      for (const o of elegidos()) {
+        o.color = { ...o.color, [k]: v };
+        if (Object.entries(COLOR).every(([j, [b]]) => (o.color[j] ?? b) === b)) delete o.color; // de vuelta al original
+      }
+      $(`di-${k}-v`).textContent = texto(v);
+      repintarEnVivo([...grupo]);
+    };
+    $(`di-${k}`).onchange = () => { guardar(); pintarDisenador(); };
+  }
+  $('di-color-0').onclick = () => cambiar(o => { delete o.color; });
+  $('di-profundidad').onclick = () => {
+    const d = diseno(); d.profundidad = d.profundidad === false; // undefined (encendida) ⇄ false
+    if (d.profundidad) delete d.profundidad;
+    guardar(); pintarDisenador();
+    avisar(d.profundidad === false ? 'Profundidad apagada: todo con su color, atrás y adelante.' : 'Profundidad encendida: lo de atrás se ve un poco más oscuro, como en un acuario real.');
+  };
   $('di-voltear').onclick = () => cambiar(o => { o.espejo = !o.espejo; });
   // Bloquear: lo bloqueado no se elige al tocarlo (el toque pasa a lo de atrás). Se dibuja igual; en el diseñador lleva un candado.
   $('di-bloquear').onclick = () => {
@@ -486,7 +516,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
       .filter(el => (incluirBloqueados ? el.dataset?.o && $('di-vista').contains(el) : elegible(el)) && (el.tagName !== 'IMG' || opaco(el, x, y)))
       .map(el => el.dataset.o))];
   }
-  const contexto = () => ({ largo: datos.acuario.largo, alto: datos.acuario.alto, catalogo: plantas, sustrato: diseno().sustrato, objetos: diseno().objetos });
+  const contexto = () => ({ largo: datos.acuario.largo, alto: datos.acuario.alto, catalogo: plantas, sustrato: diseno().sustrato, objetos: diseno().objetos, profundidad: diseno().profundidad !== false });
   /** Lo que se mueve: lo elegido (lo unido a sus rocas o troncos va con ellas solo). */
   const quienesSeMueven = () => elegidos().map(o => o.id);
   /**
@@ -1109,6 +1139,7 @@ async function imagenDeVista(vista) {
       m.fillStyle = lados; m.fillRect(0, 0, mw, mh);
     }
     ctx.save();
+    const filtro = el.style.getPropertyValue('--f').trim(); if (filtro) ctx.filter = filtro; // color de la planta y profundidad
     ctx.translate(x + w / 2, y + h);                                   // base de la imagen
     ctx.rotate((parseFloat(el.style.rotate) || 0) * Math.PI / 180);
     if (el.style.transform.includes('scaleX(-1)')) ctx.scale(-1, 1);
