@@ -158,6 +158,46 @@ export function colorDeLuz([r, g, b, u]) {
   return `rgb(${c(r * 2.3 + u * 0.6 + 25)}, ${c(g * 2.3 + 25)}, ${c(b * 2.3 + u * 1.2 + 25)})`;
 }
 
+/*
+ * Luz realista: cada LED ilumina con su color real (rojo ~630 nm, verde ~520 nm, azul ~450 nm, UV ~400 nm) y cada
+ * canal de la imagen se multiplica por la luz que le llega, como el color de una hoja bajo esa lámpara:
+ * sin rojo, las plantas rojas se apagan; con mucho azul, todo azulado. El UV agrega algo de violeta y realza rojos y rosas.
+ */
+const LED = [[1, 0.1, 0.02], [0.1, 1, 0.3], [0.04, 0.25, 1], [0.22, 0, 0.42]]; // cuánto da cada LED en R, G, B de la imagen (UV es tenue)
+const luzDe = cs => [0, 1, 2].map(k => cs.reduce((t, v, i) => t + v * LED[i][k], 0));
+const forma = l => l.map(v => v / l[1]);
+// Blanco de referencia: entre "Crecimiento" (80/70/60/30) y los cuatro parejos, para que los dos se vean neutros.
+const BLANCO = (() => { const a = forma(luzDe([0.8, 0.7, 0.6, 0.3])), b = forma(luzDe([1, 1, 1, 1])); return a.map((v, k) => Math.sqrt(v * b[k])); })();
+const NOCHE = [0.45, 0.6, 1];                     // con la lámpara apagada: luz de luna azulada y tenue
+
+/**
+ * Matriz de feColorMatrix (4×5, 20 números) para la luz de la lámpara con los canales [rojo, verde, azul, UV] en %.
+ * Brillo total según el canal más alto (como antes); en 0 % queda de noche, no negro.
+ */
+export function matrizLuz(colores) {
+  const cs = [0, 1, 2, 3].map(i => Math.max(0, Math.min(100, colores[i] || 0)) / 100);
+  const intensidad = Math.max(...cs);
+  const brillo = 0.22 + 0.85 * Math.min(1, intensidad * 1.3);
+  const l = luzDe(cs).map((v, k) => v / BLANCO[k]), alto = Math.max(...l) || 1;
+  const w = Math.min(1, intensidad / 0.15);         // poca luz: se va mezclando con la de noche
+  const g = l.map((v, k) => +(brillo * (w * v / alto + (1 - w) * NOCHE[k])).toFixed(3));
+  const uv = +(cs[3] * 0.03).toFixed(3);              // un velo violeta muy leve
+  return [g[0], 0, 0, 0, uv, 0, g[1], 0, 0, 0, 0, 0, g[2], 0, uv, 0, 0, 0, 1, 0];
+}
+
+/** Aplica la matriz de luz a los píxeles (para "Guardar imagen", igual que el filtro de la pantalla). */
+export function aplicarMatriz(px, m) {
+  for (let i = 0; i < px.length; i += 4) {
+    const r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3] / 255;
+    px[i] = m[0] * r + m[1] * g + m[2] * b + m[4] * 255;
+    px[i + 1] = m[5] * r + m[6] * g + m[7] * b + m[9] * 255;
+    px[i + 2] = m[10] * r + m[11] * g + m[12] * b + m[14] * 255;
+    px[i + 3] = (m[18] * a + m[19]) * 255;
+  }
+  return px;
+}
+let luzN = 0;
+
 // Azar fijo: el mismo diseño se ve siempre igual, pero cada mata distinta.
 function azar(semilla) {
   let s = [...semilla].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
@@ -428,7 +468,7 @@ export function vistaFrontal({ acuario, diseno, catalogo, colores, seleccion, ca
     const ap = apoyo(o, ctx);
     return `<div class="candado" style="left:${ap.x}%;bottom:${100 - ap.y + 0.5}%" title="Bloqueado">${CANDADO}</div>`;
   }).join('') : '');
-  const luz = colorDeLuz(colores);
+  const matriz = matrizLuz(colores), idLuz = `luz-${++luzN}`;
   const borde = bordeSustrato(sustrato, alto);
   const tope = Math.min(...borde.map(p => p[1]));
   const tipo = tipoSustrato(acuario);
@@ -437,15 +477,16 @@ export function vistaFrontal({ acuario, diseno, catalogo, colores, seleccion, ca
   return `<div class="tanque" style="--prop:${(alto / largo * 1.09).toFixed(3)}">
     ${lampara(colores)}
     <div class="aire" style="aspect-ratio:${largo}/${(alto * 0.09).toFixed(1)}"></div>
-    <div class="vista-frontal" style="aspect-ratio:${largo}/${alto};filter:brightness(${(0.22 + 0.85 * Math.min(1, brillo * 1.3)).toFixed(2)})"
+    <svg class="filtro-luz" width="0" height="0" aria-hidden="true"><filter id="${idLuz}" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix" values="${matriz.join(' ')}"/></filter></svg>
+    <div class="vista-frontal" style="aspect-ratio:${largo}/${alto};filter:url(#${idLuz})" data-luz="${matriz.join(' ')}"
       role="img" aria-label="Vista frontal del acuario">
     <div class="agua"></div>
     <div class="sustrato" style="${arena}" data-tipo="${tipo}" data-alto="${alto}" data-borde="${borde.map(p => p.join(' ')).join(',')}"></div>
     ${capas}
     ${resaltar(seleccion)}
-    <div class="luz" style="background:${luz};opacity:${(0.15 + brillo * 0.25).toFixed(2)}"></div>
-    <div class="haz" style="--luz:${luz};opacity:${(brillo * 0.55).toFixed(2)}"></div>
-    <div class="barra-luz" style="background:${luz};opacity:${(brillo * 0.9).toFixed(2)}"></div>
+    <div class="haz" style="opacity:${(brillo * 0.45).toFixed(2)}"></div>
+    <div class="barra-luz" style="opacity:${(brillo * 0.9).toFixed(2)}"></div>
     ${objetos.length ? '' : '<div class="vacio">Toca "Editar diseño" para acomodar tus plantas</div>'}
   </div></div>`;
 }

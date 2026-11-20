@@ -92,7 +92,7 @@
   nav button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   nav button[aria-selected="true"] { color: var(--texto); font-weight: 600; }
   /* Vista frontal del acuario: capas de imágenes PNG posicionadas en % */
-  .vista-frontal { position: relative; width: 100%; overflow: hidden; border-radius: 14px; border: 1px solid var(--linea); transition: filter .4s; isolation: isolate; }
+  .vista-frontal { position: relative; width: 100%; overflow: hidden; border-radius: 14px; border: 1px solid var(--linea); isolation: isolate; }
   .vista-frontal .agua { position: absolute; inset: 0; background: linear-gradient(#16262C, #0D1A1F); }
   /* El sustrato sube hasta la base del fondo (80 %) y queda detrás del medio y el frente: así nada flota. */
   .vista-frontal .sustrato { position: absolute; left: 0; right: 0; bottom: 0; height: 21.5%; background: linear-gradient(#2A2018, #3A2C20 35%, #241A12); z-index: 825; }
@@ -115,10 +115,11 @@
   .tanque .aire::before { left: 2.5%; } .tanque .aire::after { right: 2.5%; }
   .vista-frontal .agua { box-shadow: inset 0 2px 0 rgba(200,230,255,.22); } /* superficie del agua */
   .vista-frontal .haz { position: absolute; inset: 0; z-index: 2999; pointer-events: none; mix-blend-mode: screen;
-    background: repeating-linear-gradient(97deg, transparent 0 4%, color-mix(in srgb, var(--luz) 22%, transparent) 4% 6%, transparent 6% 11%),
-      linear-gradient(color-mix(in srgb, var(--luz) 40%, transparent), transparent 75%);
+    background: repeating-linear-gradient(97deg, transparent 0 4%, color-mix(in srgb, var(--luz, #FFF6E6) 22%, transparent) 4% 6%, transparent 6% 11%),
+      linear-gradient(color-mix(in srgb, var(--luz, #FFF6E6) 40%, transparent), transparent 75%);
     -webkit-mask-image: linear-gradient(#000, transparent 90%); mask-image: linear-gradient(#000, transparent 90%); }
-  .vista-frontal .barra-luz { position: absolute; left: 0; right: 0; top: 0; height: 2.5%; z-index: 3001; pointer-events: none; }
+  .vista-frontal .barra-luz { position: absolute; left: 0; right: 0; top: 0; height: 2.5%; z-index: 3001; pointer-events: none; background: #FFF6E6; }
+  .tanque .filtro-luz { position: absolute; width: 0; height: 0; }
   .vista-frontal .vacio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--sec); font-size: 13px; z-index: 3002; pointer-events: none; }
   #di-sel input[type=range], #di-pendiente, #di-frente-alto, #di-malla-alto { accent-color: var(--sol); }
   .vista-superior.editando { touch-action: none; }

@@ -1,7 +1,7 @@
 // Módulo del acuario: registro, recomendación y bitácora. No sabe nada de Bluetooth;
 // solo le pasa al módulo de luz "usa esta mezcla" o "usa estas horas" cuando el usuario lo pide.
 import { recomendar, horasDeArranque, avisosDeGrupo } from '../../datos/recomendar.js';
-import { PAISAJE, seccionesPara, autocompletar, celdasAObjetos, nuevoId, posicionInicial, numerar, avisosDiseno, vistaFrontal, plantilla, PLANTILLAS, vistaSuperior, listaCompras, esAlfombra, PERFILES, archivoPaisaje, SUSTRATOS, tipoSustrato, sustratoAComprar, granos, TEXTURA_CM,
+import { PAISAJE, seccionesPara, autocompletar, celdasAObjetos, nuevoId, posicionInicial, numerar, avisosDiseno, vistaFrontal, plantilla, PLANTILLAS, vistaSuperior, listaCompras, esAlfombra, PERFILES, archivoPaisaje, SUSTRATOS, tipoSustrato, sustratoAComprar, granos, TEXTURA_CM, aplicarMatriz,
   aV3, mallaDesde, suavizar, apoyo, sobreDesdePunto, dibujarObjeto, soporteDe, bDe, profundidad, planoDe, MALLA, ALTO_MIN, ALTO_AVISO, altoMax, sustratoMasAlto } from './diseno.js';
 
 const CLAVE = 'acuario';
@@ -1061,13 +1061,20 @@ async function imagenDeVista(vista) {
     ctx.drawImage(el, -dw / 2, -dh, dw, dh);
     ctx.restore();
   }
-  // Luz de la lámpara (color en modo luz suave) y brillo general, como en pantalla.
-  const luz = vista.querySelector('.luz');
-  ctx.globalCompositeOperation = 'soft-light'; ctx.globalAlpha = +luz.style.opacity || 0.3;
-  ctx.fillStyle = luz.style.background; ctx.fillRect(0, 0, W, H);
-  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
-  const brillo = (vista.style.filter.match(/brightness\(([\d.]+)\)/) || [])[1];
-  const final = Object.assign(document.createElement('canvas'), { width: c.width, height: c.height });
-  const f = final.getContext('2d'); if (brillo) f.filter = `brightness(${brillo})`; f.drawImage(c, 0, 0);
+  // El resplandor de arriba (como .haz en pantalla) y, al final, la luz de la lámpara: la misma matriz que el filtro de la pantalla.
+  const haz = +(vista.querySelector('.haz')?.style.opacity || 0);
+  if (haz) {
+    ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = haz;
+    g = ctx.createLinearGradient(0, 0, 0, H * 0.75); g.addColorStop(0, 'rgba(255,246,230,.4)'); g.addColorStop(1, 'rgba(255,246,230,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  }
+  const final = c, f = ctx;
+  const m = (vista.dataset.luz || '').split(' ').map(Number);
+  if (m.length === 20) {
+    f.setTransform(1, 0, 0, 1, 0, 0);
+    const datosPx = f.getImageData(0, 0, c.width, c.height);
+    aplicarMatriz(datosPx.data, m); f.putImageData(datosPx, 0, 0);
+  }
   return new Promise((ok, mal) => final.toBlob(b => b ? ok(b) : mal(new Error('sin imagen')), 'image/png'));
 }
