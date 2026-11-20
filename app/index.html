@@ -195,6 +195,23 @@
     .di-izq { position: sticky; top: 12px; }
     .mezclas { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
   }
+  /* Tablet vertical: el dibujo arriba, a todo el ancho y fijo al desplazarse; las herramientas abajo en dos columnas. */
+  @media (min-width: 768px) and (orientation: portrait) {
+    main:has(> #disenador:not([hidden])) { max-width: none; }
+    .di-cols { display: block; }
+    .di-izq { position: sticky; top: 0; z-index: 20; background: var(--bg); padding: 8px 0; margin-bottom: 8px; box-shadow: 0 10px 12px -10px rgba(0,0,0,.6); }
+    #di-general { display: block; columns: 2 300px; column-gap: 20px; }
+    #di-general > * { break-inside: avoid; margin-bottom: 14px; }
+  }
+  /* Tablet acostada y PC: el dibujo ~70 % del ancho y el panel ~30 % (300–380 px), sin bandas vacías; el dibujo crece hasta el alto disponible. */
+  @media (min-width: 768px) and (orientation: landscape) and (min-height: 521px) {
+    main:has(> #disenador:not([hidden])) { max-width: none; }
+    .di-cols { grid-template-columns: minmax(0, 1fr) clamp(300px, 30%, 380px); }
+    .di-izq .zoom-caja { width: min(100%, calc((100dvh - 190px) / var(--prop, .5))); margin: 0 auto; }
+    .di-der { position: sticky; top: 12px; max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+  }
+  /* PC: nombre de la planta al pasar el mouse. */
+  .nombre-hover { position: fixed; z-index: 90; pointer-events: none; background: rgba(14,17,20,.92); border: 1px solid var(--linea); border-radius: 8px; padding: 3px 8px; font-size: 12px; white-space: nowrap; }
   /* Celular acostado (poco alto): el dibujo ocupa el alto disponible y las herramientas van en un panel que se desplaza. */
   @media (orientation: landscape) and (max-height: 520px) {
     main { max-width: none; padding: 8px 12px 80px; gap: 8px; }
@@ -443,6 +460,7 @@
     </div>
     </div>
     </div>
+    <div id="di-nombre" class="nombre-hover" aria-hidden="true" hidden></div>
     <div id="di-mapa" class="mapa" role="dialog" aria-label="Vista de arriba" hidden>
       <div class="mapa-barra"><span class="agarradera" title="Mover">⋮⋮</span><span class="sec">Vista de arriba</span><button id="di-mapa-cerrar" class="chip" type="button" aria-label="Cerrar la vista de arriba">✕</button></div>
       <div id="di-mapa-cuerpo"></div>

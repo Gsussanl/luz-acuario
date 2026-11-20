@@ -598,6 +598,15 @@ export function ladoTarjeta(px, py, ancho, alto, tarjeta = 300) {
   return py > alto / 2 ? 'arriba' : 'abajo';
 }
 
+/**
+ * Flechas del teclado (PC): cuánto se mueve lo elegido. dx en % del largo; dd en profundidad (abajo = más al frente);
+ * dy en % del alto (lo unido a una roca sube o baja sobre ella). Con Shift, más. null si la tecla no mueve.
+ */
+export function pasoTecla(tecla, shift = false) {
+  const k = shift ? 5 : 1;
+  return { ArrowLeft: { dx: -0.5 * k }, ArrowRight: { dx: 0.5 * k }, ArrowUp: { dd: -0.01 * k, dy: -0.8 * k }, ArrowDown: { dd: 0.01 * k, dy: 0.8 * k } }[tecla] || null;
+}
+
 /** "Agregar → Ver todas": el catálogo agrupado por tipo (solo los grupos que tienen algo). */
 export function gruposAgregar(catalogo, paisaje = PAISAJE) {
   const zonas = [['Alfombras', 'primer'], ['Medio', 'medio'], ['Fondo', 'fondo'], ['Sobre rocas', 'epifita'], ['Flotantes', 'flotante']];

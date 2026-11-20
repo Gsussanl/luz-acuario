@@ -2,7 +2,7 @@
 // solo le pasa al módulo de luz "usa esta mezcla" o "usa estas horas" cuando el usuario lo pide.
 import { recomendar, horasDeArranque, avisosDeGrupo } from '../../datos/recomendar.js';
 import { PAISAJE, seccionesPara, autocompletar, celdasAObjetos, nuevoId, posicionInicial, numerar, avisosDiseno, vistaFrontal, plantilla, PLANTILLAS, vistaSuperior, listaCompras, esAlfombra, PERFILES, archivoPaisaje, SUSTRATOS, tipoSustrato, sustratoAComprar, granos, TEXTURA_CM, aplicarMatriz, OLAS,
-  aV3, mallaDesde, suavizar, consejosComposicion, gruposAgregar, resumenCompras, historial, sustituir, profundidadDesdeToque, ladoTarjeta, apoyo, sobreDesdePunto, dibujarObjeto, soporteDe, bDe, profundidad, planoDe, MALLA, ALTO_MIN, ALTO_AVISO, altoMax, sustratoMasAlto } from './diseno.js';
+  aV3, mallaDesde, suavizar, consejosComposicion, gruposAgregar, resumenCompras, historial, sustituir, profundidadDesdeToque, ladoTarjeta, pasoTecla, apoyo, sobreDesdePunto, dibujarObjeto, soporteDe, bDe, profundidad, planoDe, MALLA, ALTO_MIN, ALTO_AVISO, altoMax, sustratoMasAlto } from './diseno.js';
 
 const CLAVE = 'acuario';
 const TIPOS = { co2: 'Plantado con CO₂', 'sin-co2': 'Plantado sin CO₂', peces: 'Solo peces' };
@@ -786,12 +786,47 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   };
   cajaZoom.addEventListener('pointerup', quitarDedo, true);
   cajaZoom.addEventListener('pointercancel', quitarDedo, true);
-  // Trackpad o Ctrl + rueda en computadora.
+  // Rueda del mouse (o pellizco del trackpad) sobre el dibujo = zoom. De lado sigue desplazando; alejar a 1× deja bajar la página.
   cajaZoom.addEventListener('wheel', e => {
-    if (!e.ctrlKey) return;
+    if (!e.ctrlKey && (Math.abs(e.deltaX) > Math.abs(e.deltaY) || (zoom <= 1 && e.deltaY > 0))) return;
     e.preventDefault();
     ponerZoom(zoom * Math.exp(-e.deltaY / 200), e.clientX, e.clientY);
   }, { passive: false });
+  // PC: al pasar el mouse sobre una planta, roca o tronco, su nombre.
+  let cuadroNombre = 0;
+  $('di-vista').addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse' || e.buttons || arrastre) { $('di-nombre').hidden = true; return; }
+    cancelAnimationFrame(cuadroNombre);
+    cuadroNombre = requestAnimationFrame(() => {
+      const id = todosBajoElDedo(e.clientX, e.clientY, true)[0], o = id && diseno().objetos.find(z => z.id === id);
+      $('di-nombre').hidden = !o;
+      if (!o) return;
+      $('di-nombre').textContent = nombreDe(o) + (o.bloqueado ? ' · bloqueada' : '');
+      Object.assign($('di-nombre').style, { left: `${Math.min(e.clientX + 14, innerWidth - $('di-nombre').offsetWidth - 8)}px`, top: `${e.clientY + 16}px` });
+    });
+  });
+  $('di-vista').addEventListener('pointerleave', () => { cancelAnimationFrame(cuadroNombre); $('di-nombre').hidden = true; });
+  // PC: Supr = borrar, flechas = mover un poco (Shift = más), Ctrl+Z / Ctrl+Y = deshacer/rehacer, Esc = soltar.
+  let teclaMovio = false;
+  addEventListener('keydown', e => {
+    if ($('disenador').hidden || e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+    const ctrl = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+    if (ctrl && (k === 'z' || k === 'y')) { e.preventDefault(); return $(k === 'y' || e.shiftKey ? 'di-rehacer' : 'di-deshacer').click(); }
+    if (ctrl || e.altKey) return;
+    if (e.key === 'Escape') {
+      if (poniendo) { poniendo = null; pintarPoniendo(); } else if (grupo.size || uniendo) { elegir(null); pintarDisenador(); } else return;
+      return e.preventDefault();
+    }
+    if (!grupo.size) return;
+    if (e.key === 'Delete' || e.key === 'Supr') { e.preventDefault(); return $('di-borrar').click(); }
+    const paso = pasoTecla(e.key, e.shiftKey); if (!paso) return;
+    e.preventDefault();
+    mover(quienesSeMueven(), paso); repintarEnVivo(quienesSeMueven()); teclaMovio = true;
+  });
+  addEventListener('keyup', e => {
+    if (!teclaMovio || !pasoTecla(e.key)) return;
+    teclaMovio = false; guardar(); pintarDisenador(); // se guarda al soltar la flecha: un solo paso para deshacer
+  });
   // Al girar la pantalla (cambia el ancho, no solo la barra del navegador): se rehace la caja y se conserva el zoom y lo que se veía al centro.
   let anchoAntes = innerWidth;
   addEventListener('resize', () => {
