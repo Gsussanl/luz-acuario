@@ -1,7 +1,7 @@
 // Módulo del acuario: registro, recomendación y bitácora. No sabe nada de Bluetooth;
 // solo le pasa al módulo de luz "usa esta mezcla" o "usa estas horas" cuando el usuario lo pide.
 import { recomendar, horasDeArranque, avisosDeGrupo } from '../../datos/recomendar.js';
-import { PAISAJE, seccionesPara, autocompletar, celdasAObjetos, nuevoId, posicionInicial, numerar, avisosDiseno, vistaFrontal, plantilla, PLANTILLAS, vistaSuperior, listaCompras, esAlfombra, PERFILES, archivoPaisaje, SUSTRATOS, tipoSustrato, sustratoAComprar, granos, TEXTURA_CM, aplicarMatriz,
+import { PAISAJE, seccionesPara, autocompletar, celdasAObjetos, nuevoId, posicionInicial, numerar, avisosDiseno, vistaFrontal, plantilla, PLANTILLAS, vistaSuperior, listaCompras, esAlfombra, PERFILES, archivoPaisaje, SUSTRATOS, tipoSustrato, sustratoAComprar, granos, TEXTURA_CM, aplicarMatriz, OLAS,
   aV3, mallaDesde, suavizar, apoyo, sobreDesdePunto, dibujarObjeto, soporteDe, bDe, profundidad, planoDe, MALLA, ALTO_MIN, ALTO_AVISO, altoMax, sustratoMasAlto } from './diseno.js';
 
 const CLAVE = 'acuario';
@@ -459,8 +459,8 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
       const px = r.left + r.width / 2, py = r.top + r.height, dx = x - px, dy = y - py;
       x = px + dx * Math.cos(-rot) - dy * Math.sin(-rot); y = py + dx * Math.sin(-rot) + dy * Math.cos(-rot);
     }
-    const s = Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight);
-    const w = img.naturalWidth * s, h = img.naturalHeight * s, izq = r.left + (r.width - w) / 2, arriba = r.top + r.height - h;
+    const s = Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight), llena = img.classList.contains('alf'); // alfombra: llena su caja
+    const w = llena ? r.width : img.naturalWidth * s, h = llena ? r.height : img.naturalHeight * s, izq = r.left + (r.width - w) / 2, arriba = r.top + r.height - h;
     let u = (x - izq) / w; const v = (y - arriba) / h;
     if (u < 0 || u > 1 || v < 0 || v > 1) return false;
     if (img.style.transform.includes('scaleX(-1)')) u = 1 - u;
@@ -1066,6 +1066,7 @@ async function imagenDeVista(vista) {
   piezas.push({ arena: true, z: za, i: -1 });
   piezas.sort((a, b) => a.z - b.z || a.i - b.i);
   await Promise.all(piezas.filter(p => p.el?.tagName === 'IMG').map(p => p.el.decode().catch(() => {})));
+  const olas = await Promise.all(OLAS.map(u => new Promise(ok => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = u; })));
   for (const p of piezas) {
     if (p.arena) {
       const borde = (arena.dataset.borde || '0 78.5,100 78.5').split(',').map(p => p.split(' ').map(Number));
@@ -1089,17 +1090,29 @@ async function imagenDeVista(vista) {
     }
     const el = p.el, x = el.offsetLeft, y = el.offsetTop, w = el.offsetWidth, h = el.offsetHeight;
     if (el.classList.contains('sombra')) {
-      ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.scale(w / 2, h / 2);
+      ctx.save(); ctx.globalAlpha = +(el.style.opacity || 1); ctx.translate(x + w / 2, y + h / 2); ctx.scale(w / 2, h / 2);
       g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1); g.addColorStop(0, 'rgba(0,0,0,.55)'); g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill(); ctx.restore(); continue;
     }
     if (!el.naturalWidth) continue;
-    const s = Math.min(w / el.naturalWidth, h / el.naturalHeight), dw = el.naturalWidth * s, dh = el.naturalHeight * s;
+    const alf = el.classList.contains('alf');
+    const s = Math.min(w / el.naturalWidth, h / el.naturalHeight), dw = alf ? w : el.naturalWidth * s, dh = alf ? h : el.naturalHeight * s;
+    let fuente = el;
+    if (alf) { // alfombra: la misma máscara que en pantalla (borde ondulado arriba, lados suaves)
+      fuente = Object.assign(document.createElement('canvas'), { width: Math.max(1, Math.round(dw * k)), height: Math.max(1, Math.round(dh * k)) });
+      const m = fuente.getContext('2d'), { width: mw, height: mh } = fuente;
+      m.drawImage(el, 0, 0, mw, mh);
+      m.globalCompositeOperation = 'destination-in';
+      if (olas[+el.dataset.ola]) m.drawImage(olas[+el.dataset.ola], 0, 0, mw, mh);
+      const lados = m.createLinearGradient(0, 0, mw, 0);
+      lados.addColorStop(0, 'rgba(0,0,0,0)'); lados.addColorStop(0.14, '#000'); lados.addColorStop(0.86, '#000'); lados.addColorStop(1, 'rgba(0,0,0,0)');
+      m.fillStyle = lados; m.fillRect(0, 0, mw, mh);
+    }
     ctx.save();
     ctx.translate(x + w / 2, y + h);                                   // base de la imagen
     ctx.rotate((parseFloat(el.style.rotate) || 0) * Math.PI / 180);
     if (el.style.transform.includes('scaleX(-1)')) ctx.scale(-1, 1);
-    ctx.drawImage(el, -dw / 2, -dh, dw, dh);
+    ctx.drawImage(fuente, -dw / 2, -dh, dw, dh);
     ctx.restore();
   }
   // El resplandor de arriba (como .haz en pantalla) y, al final, la luz de la lámpara: la misma matriz que el filtro de la pantalla.

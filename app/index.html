@@ -100,6 +100,10 @@
   .vista-frontal img, .vista-frontal .falta-img { position: absolute; object-fit: contain; object-position: bottom; }
   .vista-frontal .falta-img { box-sizing: border-box; border: 1px dashed color-mix(in srgb, var(--c) 70%, #fff); background: color-mix(in srgb, var(--c) 35%, transparent);
     border-radius: 40% 40% 6px 6px; color: #EEF1F3; font-size: clamp(8px, 2.2vw, 11px); display: flex; align-items: flex-end; justify-content: center; text-align: center; padding: 3px; overflow: hidden; line-height: 1.1; }
+  /* Alfombras: la imagen llena su caja (alto según su proporción) y la máscara da el borde ondulado arriba y suave a los lados. */
+  .vista-frontal img.alf { object-fit: fill; -webkit-mask-image: var(--m), linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+    mask-image: var(--m), linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-composite: source-in; mask-composite: intersect; }
   .vista-frontal .sombra { position: absolute; pointer-events: none; border-radius: 50%; background: radial-gradient(closest-side, rgba(0,0,0,.55), rgba(0,0,0,0)); }
   .vista-frontal .luz { position: absolute; inset: 0; mix-blend-mode: soft-light; z-index: 3000; pointer-events: none; }
   /* Acuario completo: lámpara arriba, aire bajo el vidrio y el agua. */

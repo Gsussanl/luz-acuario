@@ -148,8 +148,27 @@ export function avisosDiseno(objetos, catalogo, alto) {
     if (plano === 'frente' && p.altura[1] > alto * 0.35) avisos.add(`${p.nombre} crece hasta ${p.altura[1]} cm: al frente va a tapar lo de atrás.`);
     if (plano === 'fondo' && p.altura[1] <= 5) avisos.add(`${p.nombre} es muy baja para el fondo: no se va a ver.`);
     if (p.zona === 'epifita' && !soporteDe(o, objetos)) avisos.add(`${p.nombre} se amarra a roca o tronco: elígela y toca "Unir a roca o tronco".`);
+    if (tallosPelones(o, p, objetos, catalogo)) avisos.add(`${p.nombre} deja ver abajo sus tallos sin hojas: pon delante una planta media (Alternanthera, Cryptocoryne…) o una roca.`);
   }
   return [...avisos];
+}
+
+/**
+ * ¿Una planta de tallo del fondo deja ver sus tallos pelones? Sí, si nada más adelante (planta media o de fondo,
+ * epífita, roca o tronco) la tapa abajo: a menos de ~14 % del largo de lado y al menos un poco más al frente.
+ */
+export function tallosPelones(o, p, objetos, catalogo) {
+  if (!p?.tallo || o.sobre || planoDe(o.b) !== 'fondo') return false;
+  const d = profundidad(o.b);
+  const xDe = q => { const r = q.sobre && objetos.find(z => z.id === q.sobre.id); return r ? r.x : q.x; };
+  return !objetos.some(q => {
+    if (q === o) return false;
+    const r = q.sobre && objetos.find(z => z.id === q.sobre.id);
+    if (profundidad((r || q).b) < d + 0.08 || Math.abs(xDe(q) - o.x) > 14) return false;
+    if (q.paisaje) return true;
+    const pq = catalogo.find(x => x.id === q.planta);
+    return !!pq && !esAlfombra(pq) && pq.altura[1] >= 8;
+  });
 }
 
 /** Color de la luz en el agua a partir de los 4 canales (solo visual). */
@@ -196,7 +215,7 @@ export function aplicarMatriz(px, m) {
   }
   return px;
 }
-let luzN = 0;
+let luzN = 0; const LUZ_ID = `luz-${Math.random().toString(36).slice(2, 7)}`; // único aunque haya varias vistas en la página
 
 // Azar fijo: el mismo diseño se ve siempre igual, pero cada mata distinta.
 function azar(semilla) {
@@ -211,29 +230,55 @@ function azar(semilla) {
  */
 export function copiasVariadas(planta, plano, semilla, centro, anchoSec, cuantas) {
   const r = azar(semilla + planta.id);
-  const alfombra = esAlfombra(planta);
+  const alfombra = esAlfombra(planta), tapiz = planta.zona === 'primer';
   const n = cuantas || (alfombra ? 3 : plano === 'fondo' ? 4 : 3); // el usuario puede elegir de 1 a 8
   const copias = Array.from({ length: n }, (_, k) => {
-    const dx = alfombra
+    const dx = tapiz
+      ? anchoSec * ((k - (n - 1) / 2) * 0.34 + (r() - 0.5) * 0.1)  // alfombra: bien encimadas, que no se vea la repetición
+      : alfombra
       ? anchoSec * ((k - (n - 1) / 2) * 0.42 + (r() - 0.5) * 0.08)
       : anchoSec * ((k - (n - 1) / 2) * 0.27 + (r() - 0.5) * 0.16);
-    return {
+    const c = {
       dx,
       // Las del fondo se enciman con la zona vecina: así crecen más altas y forman un macizo como en un acuario real.
       w: anchoSec * (alfombra ? 0.8 + r() * 0.15 : plano === 'fondo' ? 0.95 + r() * 0.45 : 0.7 + r() * 0.35),
-      f: alfombra ? 1 : 0.78 + r() * 0.27,             // 78–105 % de la altura de la especie
+      f: tapiz ? 0.8 + r() * 0.3 : alfombra ? 1 : 0.78 + r() * 0.27, // alfombra 80–110 %; matas 78–105 % de la altura de la especie
       espejo: r() < 0.5,
     };
+    if (tapiz) { c.ola = Math.floor(r() * OLAS.length); c.dy = r() * 0.5; } // forma del borde de arriba y un poco más abajo o arriba
+    return c;
   });
   return copias.sort((a, b) => b.f - a.f);           // más alta primero = queda atrás
 }
 
-function imagen(ruta, nombre, color, estilo, id) {
+/**
+ * Borde de arriba de las alfombras: ondulado, irregular y difuminado (máscara). Tres formas distintas para que no se repita.
+ * En pantalla van como mask-image (variables --ola0…) y en "Guardar imagen" se aplican igual en el canvas.
+ */
+export const OLAS = [0, 1, 2].map(k => {
+  const r = azar(`ola${k}`), pts = [];
+  for (let x = 0; x <= 100; x += 7 + r() * 6) pts.push([x, 4 + r() * 24]);
+  pts.push([100, 4 + r() * 24]);
+  let d = `M0 100L0 ${pts[0][1].toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) { // curvas suaves por los puntos medios
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+    d += `Q${x0.toFixed(1)} ${y0.toFixed(1)} ${((x0 + x1) / 2).toFixed(1)} ${((y0 + y1) / 2).toFixed(1)}`;
+  }
+  d += `L100 ${pts.at(-1)[1].toFixed(1)}L100 100Z`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="46">` +
+    `<stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".45" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff"/></linearGradient></defs><path d="${d}" fill="url(#g)"/></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+});
+
+function imagen(ruta, nombre, color, estilo, id, ola) {
   // Si falta el PNG se muestra un marcador con el nombre: así se sabe qué imagen falta.
-  return `<img src="${ruta}" alt="" loading="lazy" draggable="false" style="${estilo}" data-o="${id}" data-nombre="${escapar(nombre)}" data-color="${color}"
+  const alf = ola === undefined ? '' : ` class="alf" data-ola="${ola}"`;
+  return `<img src="${ruta}" alt="" loading="lazy" draggable="false"${alf} style="${estilo}" data-o="${id}" data-nombre="${escapar(nombre)}" data-color="${color}"
     onerror="const d=document.createElement('div');d.className='falta-img';d.textContent=this.dataset.nombre;d.setAttribute('style',this.getAttribute('style')+';--c:'+this.dataset.color);d.dataset.o=this.dataset.o;this.replaceWith(d)">`;
 }
 
+/** Alfombras: profundidades extra (hacia el frente) donde se repiten sus copias para cubrir el piso. */
+const FILAS_ALFOMBRA = [0, 0.06, 0.12];
 /** Orden de dibujo: lo de más adelante va delante. A la misma profundidad: plantas detrás, rocas y troncos delante, alfombras delante de la base de la roca. */
 const capa = (b, extra = 0) => Math.max(3, 10 + Math.round(profundidad(b) * 1000) + extra);
 
@@ -422,7 +467,10 @@ export function dibujarObjeto(o, ctx) {
     const pa = PAISAJE.find(x => x.id === o.paisaje); if (!pa) return '';
     const h = Math.min(80, pa.alto / alto * 100 * esc), w = anchoSec * pa.ancho * (o.escala || 1);
     const z = ap.z + 1 + orden;
-    return sombra(o.x, w * 0.9, ap.y, z, o.id) + imagen(archivoPaisaje(pa, o.v || 0), pa.nombre, '#7A6A5A',
+    // Sombras: suave sobre lo que está justo detrás (volumen), la de la base y una de contacto más marcada.
+    const detras = `<div class="sombra" data-s="${o.id}" style="left:${o.x - w * 0.65}%;width:${w * 1.3}%;bottom:${abajo - 1.5}%;height:${h * 1.1}%;z-index:${z - 1};opacity:.55"></div>`;
+    const contacto = `<div class="sombra" data-s="${o.id}" style="left:${o.x - w * 0.36}%;width:${w * 0.72}%;bottom:${abajo - 0.7}%;height:1.8%;z-index:${z - 1};opacity:.85"></div>`;
+    return detras + sombra(o.x, w * 0.9, ap.y, z, o.id) + contacto + imagen(archivoPaisaje(pa, o.v || 0), pa.nombre, '#7A6A5A',
       `left:${o.x - w / 2}%;width:${w}%;bottom:${abajo}%;height:${h}%;z-index:${z}` + giro(o.rot, voltear < 0), o.id);
   }
   const p = catalogo.find(x => x.id === o.planta); if (!p) return '';
@@ -431,6 +479,20 @@ export function dibujarObjeto(o, ctx) {
   const h = alfombra ? 40 : Math.min(85, Math.max(7, p.altura[1] / alto * 100)) * esc;
   const color = p.rojo ? '#C4553F' : '#3E9B58';
   const z = ap.z + (alfombra && !ap.unido ? 2 : 0) + orden;
+  if (p.zona === 'primer' && !ap.unido) {
+    // Alfombra o pasto: cada copia apoya en la altura del sustrato en su punto (malla), alto según la proporción de su imagen,
+    // con el borde de arriba ondulado y difuminado y los lados suaves (clase "alf"). Una alfombra cubre el piso: se dibuja
+    // en tres filas hacia el frente (hasta ~5 cm más adelante), así no queda una franja de tierra entre alfombras.
+    const prop = p.proporcion || 0.2, d0 = profundidad(o.b);
+    const copias = copiasVariadas(p, 'frente', o.id, ap.x, anchoSec * (o.escala || 1), o.copias);
+    return FILAS_ALFOMBRA.filter(fd => d0 + fd <= 1.001).flatMap((fd, i) => copias.map(({ dx, w, f, espejo, ola, dy }, n) => {
+      const b = bDe(Math.min(1, d0 + fd)), xc = ap.x + (dx + i % 2 * anchoSec * 0.17) * voltear;
+      const yc = Math.min(100, yArena(ctx.sustrato, limitar(xc, 0, 100), b, alto) + dy), fc = f * (1 - 0.07 * i);
+      return imagen(`img/plantas/${p.id}.png`, i || n ? '' : p.nombre, color,
+        `left:${xc - w / 2}%;width:${w}%;bottom:${100 - yc}%;height:${w * prop * largo / alto * fc}%;z-index:${capa(b, 2) + orden};--m:var(--ola${(ola + i) % OLAS.length})` +
+        giro(o.rot, (espejo !== (i % 2 === 1)) !== (voltear < 0)), o.id, (ola + i) % OLAS.length);
+    })).join('');
+  }
   return (alfombra || ap.unido ? '' : sombra(ap.x, anchoSec * (o.escala || 1) * 1.1, ap.y, z, o.id)) +
     copiasVariadas(p, ap.unido ? 'medio' : planoDe(o.b), o.id, ap.x, anchoSec * (o.escala || 1), o.copias).map(({ dx, w, f, espejo }, n) =>
       imagen(`img/plantas/${p.id}.png`, n ? '' : p.nombre, color,
@@ -468,7 +530,7 @@ export function vistaFrontal({ acuario, diseno, catalogo, colores, seleccion, ca
     const ap = apoyo(o, ctx);
     return `<div class="candado" style="left:${ap.x}%;bottom:${100 - ap.y + 0.5}%" title="Bloqueado">${CANDADO}</div>`;
   }).join('') : '');
-  const matriz = matrizLuz(colores), idLuz = `luz-${++luzN}`;
+  const matriz = matrizLuz(colores), idLuz = `${LUZ_ID}-${++luzN}`;
   const borde = bordeSustrato(sustrato, alto);
   const tope = Math.min(...borde.map(p => p[1]));
   const tipo = tipoSustrato(acuario);
@@ -483,6 +545,7 @@ export function vistaFrontal({ acuario, diseno, catalogo, colores, seleccion, ca
       role="img" aria-label="Vista frontal del acuario">
     <div class="agua"></div>
     <div class="sustrato" style="${arena}" data-tipo="${tipo}" data-alto="${alto}" data-borde="${borde.map(p => p.join(' ')).join(',')}"></div>
+    <style>.vista-frontal{${OLAS.map((u, k) => `--ola${k}:url("${u}")`).join(';')}}</style>
     ${capas}
     ${resaltar(seleccion)}
     <div class="haz" style="opacity:${(brillo * 0.45).toFixed(2)}"></div>
