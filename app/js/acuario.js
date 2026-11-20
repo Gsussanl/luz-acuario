@@ -639,6 +639,8 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   };
   cajaZoom.addEventListener('pointerdown', e => {
     if (e.pointerType !== 'touch') return;
+    // Primer dedo de un toque nuevo: olvidar dedos cuyo "levantar" se perdió (p. ej. el dibujo se redibujó bajo el dedo); si no, un toque se toma por pellizco.
+    if (e.isPrimary) { dedos.clear(); pellizco = null; }
     dedos.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (dedos.size === 1) { eleccionAntes = { sel, grupo: new Set(grupo) }; return; }
     e.stopPropagation(); e.preventDefault();
