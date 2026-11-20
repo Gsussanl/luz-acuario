@@ -940,8 +940,13 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     const b = e.target.closest('[data-plantilla]'); if (!b) return;
     const d = diseno(), x = PLANTILLAS.find(z => z.id === b.dataset.plantilla);
     if (d.objetos.length && !confirm(`¿Reemplazar tu diseño por el estilo ${x.nombre}? (${x.nota})`)) return;
-    d.objetos = plantilla(x.id, seleccion().selP, datos.acuario); elegir(null); guardar(); pintarDisenador();
-    avisar(`Estilo ${x.nombre} aplicado con tus plantas. Muévelo a tu gusto.`);
+    d.objetos = plantilla(x.id, seleccion().selP, datos.acuario, plantas); elegir(null);
+    // Natural con tronco: la alfombra sigue la pendiente (si el sustrato está plano y no se le dio forma a mano).
+    if (x.id === 'natural' && !d.sustrato.malla?.editada && (d.sustrato.atras || 0) < 4) aplicarAtajo({ perfil: 'plano', atras: 6 });
+    guardar(); pintarDisenador();
+    const agregadas = [...new Set(d.objetos.filter(o => o.planta && !datos.plantas.includes(o.planta)).map(o => plantas.find(p => p.id === o.planta)?.nombre))].filter(Boolean);
+    avisar(`Estilo ${x.nombre} aplicado con tus plantas. Muévelo a tu gusto.` +
+      (agregadas.length ? ` Para lograrlo agregué ${agregadas.join(', ')}: cámbialas por las tuyas si no las tienes.` : ''));
   });
   $('di-auto').onclick = () => {
     const d = diseno();

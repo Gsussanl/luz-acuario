@@ -608,10 +608,15 @@ export const PLANTILLAS = [
   { id: 'nature', nombre: 'Nature', nota: 'Tronco en diagonal, rocas, epífitas y masas de tallo' },
   { id: 'holandes', nombre: 'Holandés', nota: 'Grupos de tallos con contraste de color, sin piedras' },
   { id: 'jungla', nombre: 'Jungla', nota: 'Troncos, epífitas y vegetación densa' },
+  { id: 'natural', nombre: 'Natural con tronco', nota: 'Tronco en diagonal con helechos, tallos rojos y naranjas atrás, arbustos rojos y alfombra en pendiente' },
 ];
 
-/** Arma un diseño con el estilo elegido usando las plantas del acuario (por zona). Las epífitas quedan unidas a su roca o tronco. */
-export function plantilla(estilo, plantas, { largo = 100, alto = 45 } = {}) {
+/**
+ * Arma un diseño con el estilo elegido usando las plantas del acuario (por zona). Las epífitas quedan unidas a su roca o tronco.
+ * "Natural con tronco" necesita ciertos papeles (tallos rojos, verdes, arbustos rojos, helechos, alfombra): si tus plantas no
+ * cubren alguno, usa una del catálogo (catalogo) para ese papel.
+ */
+export function plantilla(estilo, plantas, { largo = 100, alto = 45 } = {}, catalogo = []) {
   const r = azar(estilo);
   const zona = z => plantas.filter(p => p.zona === z);
   const tallos = zona('fondo'), medios = zona('medio'), alfombras = plantas.filter(esAlfombra), epifitas = zona('epifita');
@@ -656,6 +661,29 @@ export function plantilla(estilo, plantas, { largo = 100, alto = 45 } = {}) {
     fila(alternados.slice().reverse(), 14, 86, 84, n - 1, { escala: 0.75 });
     fila(medios, 10, 90, 88, n);
     fila(alfombras, 4, 96, 93, n + 1);
+  } else if (estilo === 'natural') {
+    // Como un paisaje natural de referencia: tronco en diagonal de atrás a la izquierda hacia el centro, con helechos;
+    // rocas chicas en su base; tallos rojos y naranjas atrás con verde en medio; arbustos rojos al medio; alfombra al frente.
+    const papel = (mias, ids) => mias.length ? mias : ids.map(id => catalogo.find(p => p.id === id)).filter(Boolean);
+    const rojos = papel(tallos.filter(p => p.rojo), ['rotala-colorata', 'ludwigia-super-red', 'rotala-blood-red']);
+    const verdes = papel(tallos.filter(p => !p.rojo && p.tallo), ['rotala-green']);
+    const arbustos = papel(medios.filter(p => p.rojo), ['alternanthera']);
+    const helechos = papel(epifitas.filter(p => p.id.startsWith('helecho')).concat(epifitas.filter(p => !p.id.startsWith('helecho'))), ['helecho-narrow', 'helecho-java']);
+    const tapiz = papel(alfombras.filter(p => p.zona === 'primer'), ['hc-cuba']);
+    const tronco = obj({ paisaje: 'tronco-dragon', x: 37, b: 85, escala: 1.3, espejo: true, rot: 0 }); out.push(tronco); // a un tercio, no al centro
+    roca('roca-negra', 21, 90, 0.7, 0); roca('roca-negra', 31, 91.5, 0.45, 1); roca('roca-negra', 72, 90.5, 0.65, 1);
+    const atras = [[6, 0], [17, 1], [28, 0], [46, -1], [56, -1], [70, 2], [82, 2], [94, 1]]; // [x, cuál rojo] (-1 = verde)
+    for (const [x, k] of atras) {
+      const p = k < 0 ? verdes[0] : rojos[k % rojos.length];
+      if (p) out.push(obj({ planta: p.id, x: x + (r() - 0.5) * 3, b: 80 + r() * 1.5, escala: 1.15, copias: 4 }));
+    }
+    if (verdes[0]) [[78, 84.5], [88, 85]].forEach(([x, b]) => out.push(obj({ planta: verdes[0].id, x, b, escala: 0.85 })));
+    // Matas rojas separadas (con verde y roca entre ellas), no una pared.
+    if (arbustos[0]) [[14, 87.5, 0.95], [44, 88.5, 0.8], [62, 88, 0.95]].forEach(([x, b, escala]) => out.push(obj({ planta: arbustos[0].id, x, b, escala, copias: 3 })));
+    helechos.slice(0, 2).forEach((p, i) => sobre(tronco, p, i ? 10 : -12));
+    if (helechos[0]) sobre(tronco, helechos[0], -2);
+    fila(tapiz, 4, 96, 92.5, n + 1);
+    fila(tapiz, 8, 92, 90, n, { escala: 0.9 });
   } else { // jungla
     const t1 = obj({ paisaje: 'tronco-spider', x: 28, b: 86, escala: 1.2, rot: 6 }); out.push(t1);
     const t2 = obj({ paisaje: 'tronco-manzanita', x: 72, b: 87, escala: 1.1, rot: -6 }); out.push(t2);
