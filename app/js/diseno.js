@@ -589,6 +589,15 @@ export function profundidadDesdeToque(sustrato, x, y, alto = 45) {
   return mejor;
 }
 
+/**
+ * Pantalla completa: de qué lado va la tarjeta de edición para no tapar lo elegido (en px de la pantalla).
+ * Si caben dos tarjetas de ancho, al lado contrario (izq/der); si no, arriba o abajo.
+ */
+export function ladoTarjeta(px, py, ancho, alto, tarjeta = 300) {
+  if (ancho >= tarjeta * 1.8) return px > ancho / 2 ? 'izq' : 'der';
+  return py > alto / 2 ? 'arriba' : 'abajo';
+}
+
 /** "Agregar → Ver todas": el catálogo agrupado por tipo (solo los grupos que tienen algo). */
 export function gruposAgregar(catalogo, paisaje = PAISAJE) {
   const zonas = [['Alfombras', 'primer'], ['Medio', 'medio'], ['Fondo', 'fondo'], ['Sobre rocas', 'epifita'], ['Flotantes', 'flotante']];

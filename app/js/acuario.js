@@ -2,7 +2,7 @@
 // solo le pasa al módulo de luz "usa esta mezcla" o "usa estas horas" cuando el usuario lo pide.
 import { recomendar, horasDeArranque, avisosDeGrupo } from '../../datos/recomendar.js';
 import { PAISAJE, seccionesPara, autocompletar, celdasAObjetos, nuevoId, posicionInicial, numerar, avisosDiseno, vistaFrontal, plantilla, PLANTILLAS, vistaSuperior, listaCompras, esAlfombra, PERFILES, archivoPaisaje, SUSTRATOS, tipoSustrato, sustratoAComprar, granos, TEXTURA_CM, aplicarMatriz, OLAS,
-  aV3, mallaDesde, suavizar, consejosComposicion, gruposAgregar, resumenCompras, historial, sustituir, profundidadDesdeToque, apoyo, sobreDesdePunto, dibujarObjeto, soporteDe, bDe, profundidad, planoDe, MALLA, ALTO_MIN, ALTO_AVISO, altoMax, sustratoMasAlto } from './diseno.js';
+  aV3, mallaDesde, suavizar, consejosComposicion, gruposAgregar, resumenCompras, historial, sustituir, profundidadDesdeToque, ladoTarjeta, apoyo, sobreDesdePunto, dibujarObjeto, soporteDe, bDe, profundidad, planoDe, MALLA, ALTO_MIN, ALTO_AVISO, altoMax, sustratoMasAlto } from './diseno.js';
 
 const CLAVE = 'acuario';
 const TIPOS = { co2: 'Plantado con CO₂', 'sin-co2': 'Plantado sin CO₂', peces: 'Solo peces' };
@@ -187,7 +187,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   let varios = false;
   const elegido = () => diseno().objetos.find(o => o.id === sel);
   const elegidos = () => diseno().objetos.filter(o => grupo.has(o.id));
-  // Celular acostado (no tablet): el diseñador va a pantalla completa (ver el CSS y pintarAcostado).
+  // Celular acostado (no tablet): el diseñador va a pantalla completa (ver el CSS y pintarInmersivo).
   const acostado = matchMedia('(orientation: landscape) and (max-height: 500px)');
   const instalada = () => matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || navigator.standalone;
   let ultimoSel = null;      // para subir el panel flotante al elegir algo nuevo
@@ -202,6 +202,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     $('disenador').hidden = false; $('nav').hidden = true;
     document.querySelectorAll('main > section[id^="tab-"]').forEach(s => { s.hidden = true; });
     elegir(null); varios = false; editandoMalla = false; puntos = new Set(); poniendo = null; $('di-vista').classList.remove('tercios');
+    panelInm = ''; cerrarMapa(); for (const k in posiciones) delete posiciones[k]; pintarInmersivo();
     hist.inicio(JSON.stringify(diseno())); pintarHistorial();
     pintarDisenador(); pintarPoniendo(); ponerZoom(1); scrollTo(0, 0);
   }
@@ -235,7 +236,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     pintarPaleta();
     $('di-profundidad').setAttribute('aria-pressed', diseno().profundidad !== false);
     $('di-profundidad').textContent = diseno().profundidad !== false ? 'Profundidad: lo de atrás más oscuro' : 'Profundidad: apagada';
-    if (acostado.matches && sel && sel !== ultimoSel) $('di-panel').scrollTop = 0; // al elegir algo, sus controles arriba del panel flotante
+    if (inmersivo() && sel && sel !== ultimoSel) $('di-panel').scrollTop = 0; // al elegir algo, sus controles arriba de la tarjeta
     ultimoSel = sel;
 
     // Lista de compras: especies numeradas (como en la vista desde arriba) con cantidades aproximadas.
@@ -317,6 +318,9 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     $('di-ayuda').hidden = !!o;
     $('di-general').hidden = !!o; // con algo elegido, solo su edición
     pintarCambiar();
+    // Pantalla completa: tocar algo abre su tarjeta de edición; soltarlo la cierra.
+    if (o && !poniendo) panelInm = 'editar'; else if (!o && panelInm === 'editar') panelInm = '';
+    pintarPanelInm();
     $('di-varios').setAttribute('aria-pressed', varios);
     $('di-varios').textContent = varios ? 'Elegir varios: sí' : 'Elegir varios';
     // Sin nada elegido, deslizar sobre el dibujo desplaza la página (o el zoom); con algo elegido, lo mueve.
@@ -401,7 +405,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   $('di-paleta').addEventListener('click', e => {
     if (e.target.closest('[data-todas]')) { verTodas = !verTodas; return pintarPaleta(); }
     const b = e.target.closest('[data-agregar]'); if (!b) return;
-    poniendo = JSON.parse(b.dataset.agregar); pintarPoniendo();
+    poniendo = JSON.parse(b.dataset.agregar); panelInm = ''; pintarPoniendo(); pintarPanelInm();
     $('di-vista').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   });
   /** Agregar donde tocas: aviso arriba del dibujo con Cancelar; en el celular acostado el panel se oculta mientras tanto. */
@@ -805,25 +809,90 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     });
   });
 
-  // ---------- Celular acostado: el dibujo a pantalla completa, herramientas en un panel flotante ----------
-  function pintarAcostado() {
-    const oculto = $('disenador').dataset.herr === 'oculto';
-    $('di-herr').textContent = oculto ? 'Herramientas' : 'Ocultar';
-    $('di-herr').setAttribute('aria-expanded', !oculto);
-    $('di-completa').hidden = !acostado.matches || instalada() || !document.documentElement.requestFullscreen;
-    $('di-completa').textContent = document.fullscreenElement ? 'Salir de pantalla completa' : 'Pantalla completa';
+  // ---------- Pantalla completa (celular acostado o botón "Pantalla completa"): solo el dibujo y una barra flotante ----------
+  // Agregar, la tarjeta de edición (al lado contrario de lo elegido) y la vista de arriba flotan y se mueven desde ⋮⋮.
+  const inmersivo = () => acostado.matches || !!document.fullscreenElement;
+  let panelInm = '', mapaAbierto = false;   // panelInm: '' | 'agregar' | 'editar' | 'mas'
+  const posiciones = {};                     // dónde dejó el usuario la barra, la tarjeta y el mapa (mientras el diseñador está abierto)
+  const lugarArriba = $('di-arriba').parentNode;
+  function pintarInmersivo() {
+    const si = inmersivo(), fs = !!document.fullscreenElement, puede = !instalada() && !!document.documentElement.requestFullscreen;
+    document.documentElement.classList.toggle('inmersivo', si);
+    $('di-completa').hidden = !puede || si;
+    $('di-b-completa').hidden = !puede;
+    $('di-b-completa').textContent = fs ? '⤡' : '⤢';
+    $('di-b-completa').setAttribute('aria-label', fs ? 'Salir de pantalla completa' : 'Pantalla completa');
+    if (!si) { panelInm = ''; cerrarMapa(); }
+    for (const id of ['di-barra', 'di-panel', 'di-mapa']) colocar($(id), si);
+    pintarPanelInm();
   }
-  $('di-herr').onclick = () => {
-    $('disenador').dataset.herr = $('disenador').dataset.herr === 'oculto' ? '' : 'oculto';
-    pintarAcostado();
+  function pintarPanelInm() {
+    if (panelInm) $('disenador').dataset.panel = panelInm; else delete $('disenador').dataset.panel;
+    for (const [id, k] of [['di-b-agregar', 'agregar'], ['di-b-editar', 'editar'], ['di-b-mas', 'mas']]) $(id).setAttribute('aria-pressed', panelInm === k);
+    $('di-b-arriba').setAttribute('aria-pressed', mapaAbierto);
+    ubicarTarjeta();
+  }
+  /** La tarjeta de edición va al lado contrario de lo elegido (si el usuario no la movió). */
+  function ubicarTarjeta() {
+    const t = $('di-panel'); t.classList.remove('izq', 'arriba', 'abajo');
+    if (!inmersivo() || panelInm !== 'editar' || posiciones['di-panel']) return;
+    const r = [...$('di-vista').querySelectorAll(`[data-o="${sel}"]`)].map(e => e.getBoundingClientRect()).filter(q => q.width);
+    if (!r.length) return;
+    const x = (Math.min(...r.map(q => q.left)) + Math.max(...r.map(q => q.right))) / 2, y = (Math.min(...r.map(q => q.top)) + Math.max(...r.map(q => q.bottom))) / 2;
+    const lado = ladoTarjeta(x, y, innerWidth, innerHeight, Math.min(300, innerWidth * 0.42));
+    if (lado !== 'der') t.classList.add(lado);
+  }
+  /** Pone el elemento donde lo dejó el usuario (o donde dice el CSS). */
+  function colocar(el, si) {
+    const p = si ? posiciones[el.id] : null;
+    el.style.left = p?.x != null ? `${p.x}px` : ''; el.style.top = p?.y != null ? `${p.y}px` : '';
+    el.style.right = el.style.bottom = p?.x != null ? 'auto' : '';
+    el.style.width = p?.w ? `${p.w}px` : '';
+  }
+  /** Mover desde la agarradera (o agrandar desde la esquina, en el mapa). */
+  function arrastrable(el, asa) {
+    asa.addEventListener('pointerdown', e => {
+      if (!inmersivo()) return;
+      e.preventDefault(); e.stopPropagation();
+      const r = el.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top, redim = asa.classList.contains('redim');
+      try { asa.setPointerCapture(e.pointerId); } catch { /* puntero ya liberado */ }
+      const mover = ev => {
+        const p = posiciones[el.id] = { x: r.left, y: r.top, ...posiciones[el.id] };
+        if (redim) p.w = Math.round(Math.max(200, Math.min(innerWidth - p.x - 8, r.width + ev.clientX - e.clientX)));
+        else { p.x = Math.round(Math.max(0, Math.min(innerWidth - r.width, ev.clientX - dx))); p.y = Math.round(Math.max(0, Math.min(innerHeight - r.height, ev.clientY - dy))); }
+        el.classList.remove('izq', 'arriba', 'abajo');
+        colocar(el, true);
+      };
+      const fin = () => { asa.removeEventListener('pointermove', mover); asa.removeEventListener('pointerup', fin); asa.removeEventListener('pointercancel', fin); };
+      asa.addEventListener('pointermove', mover); asa.addEventListener('pointerup', fin); asa.addEventListener('pointercancel', fin);
+    });
+  }
+  arrastrable($('di-barra'), $('di-barra').querySelector('.agarradera'));
+  arrastrable($('di-panel'), $('di-panel').querySelector('.agarradera'));
+  arrastrable($('di-mapa'), $('di-mapa').querySelector('.agarradera'));
+  arrastrable($('di-mapa'), $('di-mapa').querySelector('.redim'));
+  function abrirMapa() { mapaAbierto = true; $('di-mapa-cuerpo').append($('di-arriba')); $('di-mapa').hidden = false; colocar($('di-mapa'), true); pintarPanelInm(); }
+  function cerrarMapa() { if (!mapaAbierto) return; mapaAbierto = false; lugarArriba.insertBefore($('di-arriba'), $('di-malla')); $('di-mapa').hidden = true; pintarPanelInm(); }
+  const abrirPanel = k => { if (panelInm !== k) elegir(null); panelInm = panelInm === k ? '' : k; pintarDisenador(); };
+  $('di-b-listo').onclick = () => $('di-listo').click();
+  $('di-b-agregar').onclick = () => abrirPanel('agregar');
+  $('di-b-mas').onclick = () => abrirPanel('mas');
+  $('di-b-editar').onclick = () => {
+    if (!grupo.size) return avisar('Toca una planta, roca o tronco para editarla.');
+    panelInm = panelInm === 'editar' ? '' : 'editar'; pintarPanelInm();
   };
-  $('di-completa').onclick = () => {
+  $('di-b-arriba').onclick = () => mapaAbierto ? cerrarMapa() : abrirMapa();
+  $('di-mapa-cerrar').onclick = cerrarMapa;
+  $('di-panel-cerrar').onclick = () => { if (panelInm === 'editar') { panelInm = ''; elegir(null); pintarDisenador(); } else { panelInm = ''; pintarPanelInm(); } };
+  const pantallaCompleta = () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => avisar('El navegador no dejó usar pantalla completa.'));
   };
-  acostado.addEventListener('change', pintarAcostado);
-  document.addEventListener('fullscreenchange', pintarAcostado);
-  pintarAcostado();
+  $('di-completa').onclick = pantallaCompleta;
+  $('di-b-completa').onclick = pantallaCompleta;
+  acostado.addEventListener('change', pintarInmersivo);
+  document.addEventListener('fullscreenchange', pintarInmersivo);
+  pintarInmersivo();
 
   // Vista desde arriba: tocar elige; con algo elegido, arrastrar lo mueve (de lado y hacia adelante/atrás).
   let arrastreArriba = null;

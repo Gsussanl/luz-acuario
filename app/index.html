@@ -177,7 +177,9 @@
   .zoom-barra { display: flex; align-items: center; gap: 8px; margin-top: -6px; }
   .zoom-barra .btn { height: 40px; min-width: 44px; padding: 0 12px; }
   @media (pointer: coarse) { .zoom-barra .btn { height: 44px; } }
-  .zoom-barra .sec:last-child { margin-left: auto; font-size: 12px; text-align: right; }
+  .zoom-barra .btn { flex: none; }
+  .zoom-barra .sec:last-child { margin-left: auto; font-size: 12px; text-align: right; flex: 1; min-width: 0; }
+  @media (max-width: 420px) { .zoom-barra .sec:last-child { display: none; } } /* no cabe junto a ↶ ↷ */
   /* Con el dedo: todo lo que se toca mide al menos 44 px. */
   @media (pointer: coarse) {
     .chip { height: 44px; }
@@ -208,30 +210,46 @@
   }
   /* Celular acostado con el diseñador abierto: el dibujo de orilla a orilla (respetando la muesca), herramientas en un panel
      flotante plegable, zoom y "Listo" en las esquinas y los avisos flotando encima. No aplica en tablet (es más alta). */
-  .solo-acostado { display: none; }
+
   @keyframes aviso-fuera { to { opacity: 0; visibility: hidden; } }
-  @media (orientation: landscape) and (max-height: 500px) {
-    main:has(> #disenador:not([hidden])) { padding: 0; }
-    main:has(> #disenador:not([hidden])) > :is(header, #version) { display: none; }
-    main:has(> #disenador:not([hidden])) > #aviso { position: fixed; z-index: 80; top: calc(58px + env(safe-area-inset-top)); /* bajo los botones, centrado en lo que deja el panel */ left: calc((100% - min(300px, 42vw)) / 2); translate: -50% 0;
-      width: max-content; max-width: min(calc(100vw - min(300px, 42vw) - 32px), 440px); font-size: 13px; padding: 8px 12px; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,.5);
-      animation: aviso-fuera .4s 5s forwards; }
-    #disenador .solo-acostado { display: inline-flex; align-items: center; }
-    #di-ayuda, #di-faltan, .zoom-barra .sec:last-child, .di-titulo > div:first-child { display: none; }
-    .di-titulo { position: fixed; z-index: 70; top: calc(8px + env(safe-area-inset-top)); left: calc(8px + env(safe-area-inset-left)); justify-content: flex-start !important; gap: 6px !important; }
-    .di-titulo .btn:not(.prim), .zoom-barra .btn { background: rgba(20,24,28,.78); backdrop-filter: blur(6px); }
-    .di-izq { position: fixed; inset: 0; z-index: 50; background: var(--bg); }
-    .di-izq .zoom-caja { width: 100%; height: 100%; margin: 0; border-radius: 0; display: flex; box-sizing: border-box;
-      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
-    #di-vista { width: calc(min(100%, (100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px) / var(--prop, .5)) /* 20px: la lámpara */ * var(--zoom, 1)); margin: auto; flex: none; }
-    .zoom-barra { position: fixed; z-index: 70; margin: 0; left: calc(8px + env(safe-area-inset-left)); bottom: calc(8px + env(safe-area-inset-bottom)); gap: 6px; }
-    .zoom-barra #di-zoom-v { background: rgba(20,24,28,.78); border-radius: 8px; padding: 2px 6px; }
-    .di-der { position: fixed; z-index: 60; top: calc(8px + env(safe-area-inset-top)); bottom: calc(8px + env(safe-area-inset-bottom)); right: calc(8px + env(safe-area-inset-right));
-      width: min(300px, 42vw); max-height: none; box-sizing: border-box; padding: 10px; background: rgba(14,17,20,.84); backdrop-filter: blur(8px);
-      border: 1px solid var(--linea); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.45); }
-    #disenador[data-herr="oculto"] .di-der, #disenador.poniendo .di-der { display: none; }
-    #di-poner { position: fixed; z-index: 85; top: calc(8px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right)); max-width: calc(100% - 340px); }
-  }
+  /* Pantalla completa (celular acostado, o el botón "Pantalla completa" en cualquier pantalla; clase "inmersivo" en <html>):
+     solo el dibujo y una barra flotante. Agregar, la tarjeta de edición y la vista de arriba flotan encima y se pueden mover. */
+  .solo-inm { display: none; }
+  html.inmersivo main:has(> #disenador:not([hidden])) { padding: 0; max-width: none; }
+  html.inmersivo main:has(> #disenador:not([hidden])) > :is(header, #version) { display: none; }
+  html.inmersivo main:has(> #disenador:not([hidden])) > #aviso { position: fixed; z-index: 80; top: calc(8px + env(safe-area-inset-top)); left: 50%; translate: -50% 0;
+    width: max-content; max-width: min(calc(100vw - 32px), 440px); font-size: 13px; padding: 8px 12px; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,.5);
+    animation: aviso-fuera .4s 5s forwards; }
+  html.inmersivo #disenador .solo-inm { display: inline-flex; align-items: center; }
+  html.inmersivo :is(#di-ayuda, #di-faltan, .zoom-barra .sec:last-child, .di-titulo) { display: none; }
+  html.inmersivo .di-izq { position: fixed; inset: 0; z-index: 50; background: var(--bg); }
+  html.inmersivo .di-izq .zoom-caja { width: 100%; height: 100%; margin: 0; border-radius: 0; display: flex; box-sizing: border-box;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  html.inmersivo #di-vista { width: calc(min(100%, (100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px) / var(--prop, .5)) /* 20px: la lámpara */ * var(--zoom, 1)); margin: auto; flex: none; }
+  html.inmersivo .zoom-barra { position: fixed; z-index: 70; margin: 0; left: calc(8px + env(safe-area-inset-left)); bottom: calc(8px + env(safe-area-inset-bottom));
+    gap: 4px; flex-wrap: wrap; max-width: calc(100vw - 16px); padding: 4px; border-radius: 14px; background: rgba(14,17,20,.72); backdrop-filter: blur(6px); box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+  html.inmersivo .zoom-barra .btn { height: 38px; min-width: 38px; padding: 0 9px; font-size: 13px; background: rgba(30,35,40,.85); }
+  html.inmersivo .zoom-barra #di-zoom-v { min-width: 28px; text-align: center; }
+  html.inmersivo .zoom-barra .btn.prim { background: var(--texto); color: var(--bg); }
+  html.inmersivo .di-der { display: none; position: fixed; z-index: 60; top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right));
+    width: min(300px, 42vw); max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow: auto; box-sizing: border-box; padding: 6px 10px 10px;
+    background: rgba(14,17,20,.88); backdrop-filter: blur(8px); border: 1px solid var(--linea); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.45); }
+  html.inmersivo #disenador[data-panel]:not(.poniendo) .di-der { display: flex; }
+  html.inmersivo #di-panel.izq { right: auto; left: calc(8px + env(safe-area-inset-left)); }
+  html.inmersivo #di-panel:is(.arriba, .abajo) { left: 8px; right: 8px; width: auto; max-height: 45dvh; }
+  html.inmersivo #di-panel.abajo { top: auto; bottom: calc(8px + env(safe-area-inset-bottom)); }
+  html.inmersivo #disenador[data-panel="agregar"] #di-panel > :not(#di-general, .panel-barra),
+  html.inmersivo #disenador[data-panel="agregar"] #di-general > :not(#di-agregar) { display: none; }
+  html.inmersivo #di-poner { position: fixed; z-index: 85; top: calc(8px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right)); max-width: calc(100% - 340px); }
+  .panel-barra { justify-content: space-between; gap: 8px; position: sticky; top: -6px; z-index: 1; background: rgba(14,17,20,.95); margin: -6px -10px 0; padding: 4px 10px; }
+  .agarradera { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; color: var(--sec); font-size: 18px; letter-spacing: -3px; padding: 6px 8px 6px 2px; }
+  /* Vista de arriba flotante (tipo mapa): se mueve desde ⋮⋮ y se agranda desde la esquina. */
+  .mapa { position: fixed; z-index: 65; right: calc(8px + env(safe-area-inset-right)); bottom: calc(60px + env(safe-area-inset-bottom)); width: min(340px, 45vw);
+    display: flex; flex-direction: column; gap: 4px; padding: 4px 8px 10px; box-sizing: border-box; background: rgba(14,17,20,.9); border: 1px solid var(--linea); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.45); }
+  .mapa-barra { display: flex; align-items: center; gap: 6px; }
+  .mapa-barra .sec { flex: 1; font-size: 13px; }
+  .mapa .redim { position: absolute; right: 0; bottom: 0; width: 22px; height: 22px; cursor: nwse-resize; touch-action: none;
+    background: linear-gradient(135deg, transparent 55%, var(--sec) 55% 62%, transparent 62% 72%, var(--sec) 72% 79%, transparent 79%); border-bottom-right-radius: 14px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -267,25 +285,32 @@
     <div class="di-titulo" style="display: flex; justify-content: space-between; align-items: center; gap: 10px">
       <div><h2 style="font-size: 22px">Diseñar acuario</h2><div class="sec num" id="di-medidas"></div></div>
       <button id="di-listo" class="btn prim" type="button" style="flex: 0 0 auto">Listo</button>
-      <button id="di-herr" class="btn solo-acostado" type="button" aria-controls="di-panel">Ocultar</button>
-      <button id="di-completa" class="btn solo-acostado" type="button" hidden>Pantalla completa</button>
+      <button id="di-completa" class="btn" type="button" style="flex: 0 0 auto" hidden>Pantalla completa</button>
     </div>
     <div class="di-cols">
     <div class="di-izq pila">
     <div id="di-poner" class="poner" role="status" hidden><span id="di-poner-t"></span><button id="di-poner-cancelar" class="chip" type="button">Cancelar</button></div>
     <div id="di-zoom-caja" class="zoom-caja"><div id="di-vista"></div></div>
-    <div class="zoom-barra">
+    <div id="di-barra" class="zoom-barra">
+      <span class="agarradera solo-inm" title="Mover la barra">⋮⋮</span>
+      <button id="di-b-listo" class="btn prim solo-inm" type="button">Listo</button>
+      <button id="di-b-agregar" class="btn solo-inm" type="button" aria-pressed="false">＋ Agregar</button>
+      <button id="di-b-editar" class="btn solo-inm" type="button" aria-pressed="false">✎ Editar</button>
+      <button id="di-b-arriba" class="btn solo-inm" type="button" aria-pressed="false">⬚ Arriba</button>
+      <button id="di-b-mas" class="btn solo-inm" type="button" aria-pressed="false" title="Sustrato, estilos, bloqueados, lista de compras…">☰ Más</button>
       <button id="di-zoom-menos" class="btn" type="button" aria-label="Alejar">−</button>
       <span id="di-zoom-v" class="sec num">1×</span>
       <button id="di-zoom-mas" class="btn" type="button" aria-label="Acercar">+</button>
       <button id="di-zoom-ajustar" class="btn" type="button">Ajustar</button>
       <button id="di-deshacer" class="btn" type="button" aria-label="Deshacer" title="Deshacer" disabled>↶</button>
       <button id="di-rehacer" class="btn" type="button" aria-label="Rehacer" title="Rehacer" disabled>↷</button>
+      <button id="di-b-completa" class="btn solo-inm" type="button" aria-label="Pantalla completa" title="Pantalla completa">⤢</button>
       <span class="sec">Dos dedos: acercar y mover</span>
     </div>
     <span id="di-faltan" class="sec"></span>
     </div>
     <div id="di-panel" class="di-der pila">
+    <div class="panel-barra solo-inm"><span class="agarradera" title="Mover">⋮⋮</span><button id="di-panel-cerrar" class="chip" type="button" aria-label="Cerrar">✕</button></div>
     <p id="di-ayuda" class="sec" style="margin: 0">Toca una planta, roca o tronco para elegirlo; luego arrástralo. Si hay algo encima, toca otra vez para elegir lo de atrás. Hacia abajo = más al frente; todo queda apoyado en la arena. Para poner una planta sobre una roca o tronco: elígela, toca "Unir a roca o tronco" y luego toca el punto exacto (o suéltala encima).</p>
     <div id="di-sel" class="tarjeta pila" style="gap: 10px; padding: 12px 14px" hidden>
       <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
@@ -356,10 +381,12 @@
       <button id="di-ver-candados" class="btn" type="button" aria-pressed="false" style="width: 100%; margin-top: 8px">Mostrar candados: no</button>
       <button id="di-desbloquear-todos" class="btn" type="button" style="width: 100%; margin-top: 8px">Desbloquear todos</button>
     </details>
-    <div class="pila" style="gap: 8px">
+    <div id="di-agregar" class="pila" style="gap: 8px">
       <h2>Agregar</h2>
       <label class="campo"><span class="solo-lector">Buscar planta, roca o tronco</span><input id="di-buscar" type="search" placeholder="Buscar planta, roca o tronco"></label>
       <div id="di-paleta" class="pila" style="gap: 8px"></div>
+    </div>
+    <div class="pila" style="gap: 8px">
       <details class="plegable">
         <summary><h2>Sustrato</h2></summary>
         <div class="pila" style="gap: 8px; padding-top: 8px">
@@ -415,6 +442,11 @@
     <button id="di-imagen" class="btn" type="button">Guardar imagen</button>
     </div>
     </div>
+    </div>
+    <div id="di-mapa" class="mapa" role="dialog" aria-label="Vista de arriba" hidden>
+      <div class="mapa-barra"><span class="agarradera" title="Mover">⋮⋮</span><span class="sec">Vista de arriba</span><button id="di-mapa-cerrar" class="chip" type="button" aria-label="Cerrar la vista de arriba">✕</button></div>
+      <div id="di-mapa-cuerpo"></div>
+      <span class="redim" title="Agrandar o achicar"></span>
     </div>
   </section>
 
