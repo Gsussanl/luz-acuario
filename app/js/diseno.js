@@ -19,6 +19,7 @@ export const PAISAJE = [
   { id: 'tronco-dragon', nombre: 'Tronco leño', alto: 30, ancho: 2.2 },
   { id: 'tronco-manzanita', nombre: 'Tronco Manzanita', alto: 30, ancho: 1.8 },
   { id: 'tronco-raiz', nombre: 'Tronco raíz', alto: 26, ancho: 1.4 },
+  { id: 'tronco-oscuro', nombre: 'Tronco oscuro', alto: 18, ancho: 2.4, variantes: 3 },
 ];
 // Variantes: <id>.png, <id>-2.png, <id>-3.png… Cada roca usa la suya para que no se vean clonadas.
 export const archivoPaisaje = (pa, v = 0) => {
