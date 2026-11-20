@@ -2,7 +2,7 @@
 // solo le pasa al módulo de luz "usa esta mezcla" o "usa estas horas" cuando el usuario lo pide.
 import { recomendar, horasDeArranque, avisosDeGrupo } from '../../datos/recomendar.js';
 import { PAISAJE, seccionesPara, autocompletar, celdasAObjetos, nuevoId, posicionInicial, numerar, avisosDiseno, vistaFrontal, plantilla, PLANTILLAS, vistaSuperior, listaCompras, esAlfombra, PERFILES, archivoPaisaje, SUSTRATOS, tipoSustrato, sustratoAComprar, granos, TEXTURA_CM, aplicarMatriz, OLAS,
-  aV3, mallaDesde, suavizar, consejosComposicion, gruposAgregar, resumenCompras, apoyo, sobreDesdePunto, dibujarObjeto, soporteDe, bDe, profundidad, planoDe, MALLA, ALTO_MIN, ALTO_AVISO, altoMax, sustratoMasAlto } from './diseno.js';
+  aV3, mallaDesde, suavizar, consejosComposicion, gruposAgregar, resumenCompras, historial, sustituir, profundidadDesdeToque, apoyo, sobreDesdePunto, dibujarObjeto, soporteDe, bDe, profundidad, planoDe, MALLA, ALTO_MIN, ALTO_AVISO, altoMax, sustratoMasAlto } from './diseno.js';
 
 const CLAVE = 'acuario';
 const TIPOS = { co2: 'Plantado con CO₂', 'sin-co2': 'Plantado sin CO₂', peces: 'Solo peces' };
@@ -30,7 +30,11 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     try { return { acuario: null, plantas: [], habitantes: {}, bitacora: [], ...JSON.parse(localStorage.getItem(CLAVE) || '{}') }; }
     catch { return { acuario: null, plantas: [], habitantes: {}, bitacora: [] }; }
   }
-  function guardar() { try { localStorage.setItem(CLAVE, JSON.stringify(datos)); } catch { /* modo privado */ } }
+  function guardar() {
+    try { localStorage.setItem(CLAVE, JSON.stringify(datos)); } catch { /* modo privado */ }
+    if (!$('disenador').hidden) anotarCambio(); // deshacer: copia del diseño antes de cada cambio que se guarda
+  }
+  const hist = historial(30);
 
   // ---------- Primer uso / editar ----------
   let borrador = null;
@@ -188,14 +192,32 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   const instalada = () => matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || navigator.standalone;
   let ultimoSel = null;      // para subir el panel flotante al elegir algo nuevo
   let uniendo = false;       // "Unir a roca o tronco": esperando que se toque la roca o tronco
-  const elegir = id => { sel = id; grupo = new Set(id ? [id] : []); uniendo = false; };
+  let cambiando = false;     // "Cambiar por…" abierto
+  let poniendo = null;       // Agregar: lo elegido para poner, esperando el toque en el dibujo o en la vista de arriba
+  const elegir = id => { sel = id; grupo = new Set(id ? [id] : []); uniendo = false; cambiando = false; };
   const colorVista = () => obtenerColores().some(v => v) ? obtenerColores() : [70, 70, 60, 20];
   const nombreDe = o => o.planta ? plantas.find(p => p.id === o.planta)?.nombre : PAISAJE.find(x => x.id === o.paisaje)?.nombre;
 
   function abrirDisenador() {
     $('disenador').hidden = false; $('nav').hidden = true;
     document.querySelectorAll('main > section[id^="tab-"]').forEach(s => { s.hidden = true; });
-    elegir(null); varios = false; editandoMalla = false; puntos = new Set(); $('di-vista').classList.remove('tercios'); pintarDisenador(); ponerZoom(1); scrollTo(0, 0);
+    elegir(null); varios = false; editandoMalla = false; puntos = new Set(); poniendo = null; $('di-vista').classList.remove('tercios');
+    hist.inicio(JSON.stringify(diseno())); pintarHistorial();
+    pintarDisenador(); pintarPoniendo(); ponerZoom(1); scrollTo(0, 0);
+  }
+  // ---------- Deshacer / rehacer (~30 cambios, mientras el diseñador está abierto) ----------
+  function anotarCambio() { hist.cambio(JSON.stringify(datos.diseno)); pintarHistorial(); }
+  function pintarHistorial() { $('di-deshacer').disabled = !hist.puede.deshacer; $('di-rehacer').disabled = !hist.puede.rehacer; }
+  function volverA(s) {
+    if (s == null) return;
+    datos.diseno = JSON.parse(s); elegir(null); editandoMalla = false; puntos = new Set();
+    guardar(); pintarDisenador();
+  }
+  $('di-deshacer').onclick = () => volverA(hist.deshacer());
+  $('di-rehacer').onclick = () => volverA(hist.rehacer());
+  /** Hace brillar un momento lo que tiene ese id en el dibujo (recién puesto, o buscado en "Bloqueados"). */
+  function brillar(id) {
+    $('di-vista').querySelectorAll(`[data-o="${id}"]`).forEach(el => { el.classList.remove('brilla'); void el.offsetWidth; el.classList.add('brilla'); });
   }
   function pintarDisenador() {
     const { objetos } = diseno(), { selP } = seleccion(), numeros = numerar(objetos);
@@ -240,28 +262,52 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
    * Agregar compacto: el buscador (recorre todo el catálogo, rocas y troncos), una fila "En tu acuario" (máximo 6)
    * y "Ver todas": el catálogo agrupado por tipo, cada grupo plegado.
    */
-  function pintarPaleta() {
+  function pintarPaleta() { $('di-paleta').innerHTML = htmlPaleta($('di-buscar').value, verTodas); }
+  /** Chips de la paleta. tipo: 'planta' o 'paisaje' para mostrar solo eso (al cambiar una cosa por otra). */
+  function htmlPaleta(texto, ver, tipo) {
     const { selP } = seleccion();
-    const f = $('di-buscar').value.trim().toLowerCase();
+    const f = texto.trim().toLowerCase(), vale = x => !tipo || !!x[tipo];
     const chip = x => `<button type="button" class="chip planta" data-agregar='${JSON.stringify({ planta: x.planta, paisaje: x.paisaje })}'>+ ${escapar(x.texto)}${x.otra ? ' <span class="sec">(no está en tu lista)</span>' : ''}</button>`;
     if (f) {
       const todo = [
         ...selP.map(p => ({ planta: p.id, texto: p.nombre, busca: p.nombre + ' ' + p.cientifico })),
         ...PAISAJE.map(x => ({ paisaje: x.id, texto: x.nombre, busca: x.nombre })),
         ...plantas.filter(p => !selP.includes(p)).map(p => ({ planta: p.id, texto: p.nombre, busca: p.nombre + ' ' + p.cientifico, otra: true })),
-      ].filter(x => x.busca.toLowerCase().includes(f));
-      $('di-paleta').innerHTML = todo.length ? `<div class="chips envolver">${todo.map(chip).join('')}</div>` : '<span class="sec">Nada con ese nombre. Prueba con otra palabra.</span>';
-      return;
+      ].filter(x => vale(x) && x.busca.toLowerCase().includes(f));
+      return todo.length ? `<div class="chips envolver">${todo.map(chip).join('')}</div>` : '<span class="sec">Nada con ese nombre. Prueba con otra palabra.</span>';
     }
-    const mias = selP.slice(0, 6).map(p => ({ planta: p.id, texto: p.nombre }));
-    $('di-paleta').innerHTML = (mias.length ? `<span class="sec">En tu acuario</span><div class="chips envolver">${mias.map(chip).join('')}</div>` : '')
-      + `<button type="button" class="chip" data-todas aria-expanded="${verTodas}" style="align-self: flex-start">${verTodas ? 'Ocultar la lista' : 'Ver todas'}</button>`
-      + (verTodas ? `<div class="pila paleta-todas" style="gap: 2px">${gruposAgregar(plantas).map(g =>
+    const mias = tipo === 'paisaje' ? [] : selP.slice(0, 6).map(p => ({ planta: p.id, texto: p.nombre }));
+    const grupos = gruposAgregar(plantas).map(g => ({ ...g, items: g.items.filter(vale) })).filter(g => g.items.length);
+    return (mias.length ? `<span class="sec">En tu acuario</span><div class="chips envolver">${mias.map(chip).join('')}</div>` : '')
+      + `<button type="button" class="chip" data-todas aria-expanded="${ver}" style="align-self: flex-start">${ver ? 'Ocultar la lista' : 'Ver todas'}</button>`
+      + (ver ? `<div class="pila paleta-todas" style="gap: 2px">${grupos.map(g =>
         `<details class="plegable" data-grupo="${g.nombre}"${gruposAbiertos.has(g.nombre) ? ' open' : ''}><summary><span class="sec">${g.nombre} (${g.items.length})</span></summary>
           <div class="chips envolver" style="padding: 4px 0 8px">${g.items.map(chip).join('')}</div></details>`).join('')}</div>` : '');
   }
   // Recordar qué grupos de "Ver todas" están abiertos (el panel se vuelve a pintar con cada cambio).
-  $('di-paleta').addEventListener('toggle', e => { const g = e.target.dataset?.grupo; if (g) e.target.open ? gruposAbiertos.add(g) : gruposAbiertos.delete(g); }, true);
+  const recordarGrupo = e => { const g = e.target.dataset?.grupo; if (g) e.target.open ? gruposAbiertos.add(g) : gruposAbiertos.delete(g); };
+  $('di-paleta').addEventListener('toggle', recordarGrupo, true);
+  $('di-cambiar-lista').addEventListener('toggle', recordarGrupo, true);
+  // ---------- "Cambiar por…": el mismo buscador; conserva lugar, tamaño, giro, color, mata, unión y bloqueo ----------
+  let cambiarTodas = false;
+  const tipoDe = o => o?.planta ? 'planta' : 'paisaje';
+  function pintarCambiar() {
+    $('di-cambiar').setAttribute('aria-expanded', cambiando);
+    $('di-cambiar').textContent = cambiando ? 'Cambiar por… (toca aquí para cerrar)' : 'Cambiar por…';
+    $('di-cambiar-caja').hidden = !cambiando;
+    if (cambiando) $('di-cambiar-lista').innerHTML = htmlPaleta($('di-cambiar-buscar').value, cambiarTodas, tipoDe(elegido()));
+  }
+  $('di-cambiar').onclick = () => { cambiando = !cambiando; $('di-cambiar-buscar').value = ''; pintarCambiar(); if (cambiando) $('di-cambiar-buscar').focus({ preventScroll: true }); };
+  $('di-cambiar-buscar').addEventListener('input', pintarCambiar);
+  $('di-cambiar-lista').addEventListener('click', e => {
+    if (e.target.closest('[data-todas]')) { cambiarTodas = !cambiarTodas; return pintarCambiar(); }
+    const b = e.target.closest('[data-agregar]'); if (!b) return;
+    const item = JSON.parse(b.dataset.agregar), tipo = tipoDe(elegido());
+    const n = elegidos().filter(o => tipoDe(o) === tipo).length;
+    cambiar(o => { if (tipoDe(o) !== tipo) return; const nuevo = sustituir(o, item); Object.keys(o).forEach(k => delete o[k]); Object.assign(o, nuevo); });
+    cambiando = false; pintarCambiar();
+    avisar(`${n > 1 ? `${n} cambiadas` : 'Cambiada'} por ${nombreDe(item)}: mismo lugar, tamaño y color.`);
+  });
   $('di-buscar').addEventListener('input', pintarPaleta);
 
   /** Barra de lo elegido: tamaño, voltear, duplicar, borrar. */
@@ -270,6 +316,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     $('di-sel').hidden = !o;
     $('di-ayuda').hidden = !!o;
     $('di-general').hidden = !!o; // con algo elegido, solo su edición
+    pintarCambiar();
     $('di-varios').setAttribute('aria-pressed', varios);
     $('di-varios').textContent = varios ? 'Elegir varios: sí' : 'Elegir varios';
     // Sin nada elegido, deslizar sobre el dibujo desplaza la página (o el zoom); con algo elegido, lo mueve.
@@ -278,11 +325,8 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     if (!o) return;
 
     const pa = PAISAJE.find(z => z.id === o.paisaje);
-    $('di-tipo-fila').hidden = !pa; $('di-forma-fila').hidden = !(pa?.variantes > 1);
+    $('di-forma-fila').hidden = !(pa?.variantes > 1);
     if (pa) {
-      const familia = pa.id.split('-')[0]; // roca o tronco
-      $('di-tipos').innerHTML = PAISAJE.filter(z => z.id.startsWith(familia + '-')).map(z =>
-        `<button type="button" class="chip planta" data-tipo="${z.id}" aria-pressed="${z.id === pa.id}">${escapar(z.nombre)}</button>`).join('');
       const n = pa.variantes || 1;
       $('di-formas').innerHTML = Array.from({ length: n }, (_, i) =>
         `<button type="button" class="chip planta forma" data-forma="${i}" aria-pressed="${(o.v || 0) % n === i}"><img src="${archivoPaisaje(pa, i)}" alt="">${i + 1}</button>`).join('');
@@ -357,15 +401,25 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   $('di-paleta').addEventListener('click', e => {
     if (e.target.closest('[data-todas]')) { verTodas = !verTodas; return pintarPaleta(); }
     const b = e.target.closest('[data-agregar]'); if (!b) return;
-    const item = JSON.parse(b.dataset.agregar);
-    const { x, b: base } = posicionInicial(item, plantas);
-    const objetos = diseno().objetos;
-    const o = { id: nuevoId(), ...item, x: x + (objetos.length % 5) * 4 - 8, b: base, escala: 1, espejo: false,
-      v: objetos.filter(z => z.paisaje && z.paisaje === item.paisaje).length };
-    objetos.push(o); elegir(o.id); guardar(); pintarDisenador();
+    poniendo = JSON.parse(b.dataset.agregar); pintarPoniendo();
     $('di-vista').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    avisar(`${nombreDe(o)}: quedó al centro y marcada. Arrástrala a su lugar.`);
   });
+  /** Agregar donde tocas: aviso arriba del dibujo con Cancelar; en el celular acostado el panel se oculta mientras tanto. */
+  function pintarPoniendo() {
+    $('di-poner').hidden = !poniendo; $('disenador').classList.toggle('poniendo', !!poniendo);
+    if (poniendo) $('di-poner-t').textContent = `Toca dónde poner ${nombreDe(poniendo)} (en el dibujo o en la vista de arriba)`;
+  }
+  $('di-poner-cancelar').onclick = () => { poniendo = null; pintarPoniendo(); };
+  const esEpifita = item => plantas.find(p => p.id === item?.planta)?.zona === 'epifita';
+  /** Pone lo elegido a lo largo x (%) y a la profundidad d (0 atrás … 1 frente); una epífita tocada sobre una roca o tronco queda unida ahí. */
+  function ponerEn(x, d, roca, punto) {
+    const item = poniendo, objetos = diseno().objetos; poniendo = null;
+    const o = { id: nuevoId(), ...item, x: Math.round(Math.min(100, Math.max(0, x)) * 10) / 10, b: bDe(d), escala: 1, espejo: false };
+    if (item.paisaje) o.v = objetos.filter(z => z.paisaje === item.paisaje).length;
+    if (roca && punto) o.sobre = { id: roca.id, x: Math.round(Math.max(-50, Math.min(50, punto.x))), y: Math.round(Math.max(0, Math.min(100, punto.y))), z: 0 };
+    objetos.push(o); elegir(o.id); guardar(); pintarDisenador(); pintarPoniendo(); brillar(o.id);
+    avisar(roca && punto ? `${nombreDe(o)} quedó unida a ${nombreDe(roca)}.` : `${nombreDe(o)} quedó donde tocaste y está elegida: arrástrala para afinar.`);
+  }
   $('di-tamano').oninput = e => {
     if (!grupo.size) return;
     for (const o of elegidos()) o.escala = +e.target.value / 100;
@@ -426,10 +480,22 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     const lista = diseno().objetos.filter(o => o.bloqueado);
     $('di-bloqueados').hidden = !lista.length;
     $('di-bloqueados-t').textContent = `Bloqueados (${lista.length})`;
-    $('di-bloqueados-lista').innerHTML = lista.map(o => `<div><span style="flex: 1">${escapar(nombreDe(o) || '')}</span>
+    $('di-ver-candados').setAttribute('aria-pressed', verCandados); $('di-ver-candados').textContent = `Mostrar candados: ${verCandados ? 'sí' : 'no'}`;
+    $('disenador').classList.toggle('ver-candados', verCandados);
+    $('di-bloqueados-lista').innerHTML = lista.map(o => `<div><button type="button" class="nombre-bloq" data-brillar="${o.id}">${escapar(nombreDe(o) || '')}</button>
       <button type="button" class="chip" data-desbloquear="${o.id}">Desbloquear</button></div>`).join('');
   }
+  let verCandados = false;
+  $('di-ver-candados').onclick = () => { verCandados = !verCandados; pintarBloqueados(); };
+  function preguntarDesbloquear(id) {
+    const o = diseno().objetos.find(z => z.id === id); if (!o) return;
+    if (!confirm(`¿Desbloquear ${nombreDe(o)}?`)) return;
+    delete o.bloqueado; elegir(o.id); guardar(); pintarDisenador(); brillar(o.id);
+    avisar(`${nombreDe(o)} desbloqueado y elegido.`);
+  }
   $('di-bloqueados-lista').addEventListener('click', e => {
+    const n = e.target.closest('[data-brillar]');
+    if (n) { $('di-vista').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return brillar(n.dataset.brillar); }
     const b = e.target.closest('[data-desbloquear]'); if (!b) return;
     const o = diseno().objetos.find(z => z.id === b.dataset.desbloquear); if (!o) return;
     delete o.bloqueado; elegir(o.id); guardar(); pintarDisenador();
@@ -439,11 +505,6 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     for (const o of diseno().objetos) delete o.bloqueado;
     guardar(); pintarDisenador(); avisar('Todo desbloqueado.');
   };
-  $('di-tipos').addEventListener('click', e => {
-    const b = e.target.closest('[data-tipo]'); if (!b) return;
-    const familia = b.dataset.tipo.split('-')[0];
-    cambiar(o => { if (o.paisaje?.startsWith(familia + '-')) { o.paisaje = b.dataset.tipo; o.v = 0; } });
-  });
   $('di-formas').addEventListener('click', e => {
     const b = e.target.closest('[data-forma]'); if (!b) return;
     const tipo = elegido()?.paisaje;
@@ -590,6 +651,16 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   let arrastre = null;
   $('di-vista').addEventListener('contextmenu', e => e.preventDefault()); // sin menú de copiar/descargar al mantener el dedo
   $('di-vista').addEventListener('pointerdown', e => {
+    if (poniendo) {
+      e.preventDefault();
+      const caja = $('di-vista').querySelector('.vista-frontal').getBoundingClientRect();
+      const x = (e.clientX - caja.left) / caja.width * 100, y = (e.clientY - caja.top) / caja.height * 100, objs = diseno().objetos;
+      const rid = esEpifita(poniendo) && todosBajoElDedo(e.clientX, e.clientY, true).find(k => objs.find(z => z.id === k)?.paisaje);
+      const r = rid && objs.find(z => z.id === rid);
+      return ponerEn(x, profundidadDesdeToque(diseno().sustrato, x, y, datos.acuario.alto), r, r && sobreDesdePunto(r, x, y, contexto()));
+    }
+    const candado = e.target.closest?.('[data-candado]');
+    if (candado) { e.preventDefault(); return preguntarDesbloquear(candado.dataset.candado); }
     if (uniendo) { // tocar la roca o tronco donde va la planta, en el punto exacto
       e.preventDefault();
       const objs = diseno().objetos, esPaisaje = k => objs.find(z => z.id === k)?.paisaje;
@@ -759,6 +830,14 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   $('di-arriba').addEventListener('contextmenu', e => e.preventDefault());
   $('di-arriba').addEventListener('pointerdown', e => {
     if (editandoMalla) return pincelar(e, true);
+    if (poniendo) {
+      const objs = diseno().objetos, a = datos.acuario, ancho = a.ancho || 40, svg = $('di-arriba').querySelector('svg').getBoundingClientRect();
+      const xCm = (e.clientX - svg.left) * (a.largo + 4) / svg.width - 2, yCm = (e.clientY - svg.top) * (ancho + 4) / svg.height - 2;
+      const rid = esEpifita(poniendo) && document.elementsFromPoint(e.clientX, e.clientY).map(z => z.closest?.('[data-o]')?.dataset.o).find(k => objs.find(z => z.id === k)?.paisaje);
+      const r = rid && objs.find(z => z.id === rid), pa = r && PAISAJE.find(z => z.id === r.paisaje);
+      return ponerEn(xCm / a.largo * 100, Math.min(1, Math.max(0, yCm / ancho)), r,
+        r && { x: (xCm - r.x / 100 * a.largo) / (20 * pa.ancho * (r.escala || 1)) * 100 * (r.espejo ? -1 : 1), y: 60 });
+    }
     if (uniendo) { // desde arriba: la planta queda a lo largo donde se tocó, a media altura
       const objs = diseno().objetos;
       const id = document.elementsFromPoint(e.clientX, e.clientY).map(z => z.closest?.('[data-o]')?.dataset.o).find(k => objs.find(z => z.id === k)?.paisaje);

@@ -549,6 +549,46 @@ export function dibujarObjeto(o, ctx) {
         giro(o.rot, espejo !== (voltear < 0)), filtro), o.id)).join('');
 }
 
+/**
+ * Deshacer / rehacer: guarda copias (texto JSON) del diseño antes de cada cambio que se guarda, hasta max.
+ * inicio(s): empieza de cero con el diseño actual. cambio(s): anota el diseño nuevo (si cambió). deshacer()/rehacer(): el diseño al que volver, o null.
+ */
+export function historial(max = 30) {
+  let atras = [], adelante = [], actual = null;
+  return {
+    inicio(s) { atras = []; adelante = []; actual = s; },
+    cambio(s) {
+      if (s === actual) return false;
+      if (actual !== null) { atras.push(actual); if (atras.length > max) atras.shift(); }
+      adelante = []; actual = s; return true;
+    },
+    deshacer() { if (!atras.length) return null; adelante.push(actual); return actual = atras.pop(); },
+    rehacer() { if (!adelante.length) return null; atras.push(actual); return actual = adelante.pop(); },
+    get puede() { return { deshacer: atras.length > 0, rehacer: adelante.length > 0 }; },
+  };
+}
+
+/**
+ * "Cambiar por…": la misma cosa con otra planta, roca o tronco. Conserva lugar, tamaño, giro, color, plantas en la mata,
+ * unión y bloqueo. Una roca o tronco nuevo empieza en su primera forma; una planta que pasa a ser roca deja su mata y unión.
+ */
+export function sustituir(o, item) {
+  const n = { ...o };
+  if (item.planta) { n.planta = item.planta; delete n.paisaje; delete n.v; }
+  else { n.paisaje = item.paisaje; n.v = 0; delete n.planta; delete n.copias; delete n.sobre; }
+  return n;
+}
+
+/** Profundidad (0 atrás … 1 frente) que corresponde a tocar el dibujo en (x, y) (en % de la vista): donde la arena está a esa altura. */
+export function profundidadDesdeToque(sustrato, x, y, alto = 45) {
+  let mejor = 0, dist = Infinity;
+  for (let i = 0; i <= 100; i++) {
+    const d = i / 100, e = Math.abs(yArena(sustrato, limitar(x, 0, 100), bDe(d), alto) - y);
+    if (e < dist) { dist = e; mejor = d; }
+  }
+  return mejor;
+}
+
 /** "Agregar → Ver todas": el catálogo agrupado por tipo (solo los grupos que tienen algo). */
 export function gruposAgregar(catalogo, paisaje = PAISAJE) {
   const zonas = [['Alfombras', 'primer'], ['Medio', 'medio'], ['Fondo', 'fondo'], ['Sobre rocas', 'epifita'], ['Flotantes', 'flotante']];
@@ -594,7 +634,7 @@ export function vistaFrontal({ acuario, diseno, catalogo, colores, seleccion, ca
   const ctx = { largo, alto, catalogo, sustrato, objetos, profundidad: diseno?.profundidad !== false };
   const capas = objetos.map(o => dibujarObjeto(o, ctx)).join('') + (candados ? objetos.filter(o => o.bloqueado).map(o => {
     const ap = apoyo(o, ctx);
-    return `<div class="candado" style="left:${ap.x}%;bottom:${100 - ap.y + 0.5}%" title="Bloqueado">${CANDADO}</div>`;
+    return `<div class="candado" data-candado="${o.id}" style="left:${ap.x}%;bottom:${100 - ap.y + 0.5}%" title="Bloqueado: toca para desbloquear">${CANDADO}</div>`;
   }).join('') : '');
   const matriz = matrizLuz(colores), idLuz = `${LUZ_ID}-${++luzN}`;
   const borde = bordeSustrato(sustrato, alto);

@@ -144,9 +144,21 @@
   .vista-superior { width: 100%; display: block; border-radius: 10px; background: #12181D; }
   .vista-superior [data-o] { cursor: pointer; }
   #di-varios[aria-pressed="true"] { border-color: var(--sol); color: var(--sol); }
-  .vista-frontal .candado { position: absolute; width: 14px; height: 14px; margin-left: -7px; z-index: 2990; pointer-events: none;
-    background: rgba(14,17,20,.75); border-radius: 4px; display: flex; align-items: center; justify-content: center; }
-  .vista-frontal .candado svg { width: 10px; height: 10px; fill: none; stroke: #F2B544; stroke-width: 2; }
+  /* Candados: chicos y ocultos; se ven con "Bloqueados" abierto, con "Mostrar candados" o al pasar el mouse. Tocarlos desbloquea. */
+  .vista-frontal .candado { position: absolute; width: 11px; height: 11px; margin-left: -5.5px; z-index: 2990; pointer-events: none; opacity: 0; transition: opacity .2s;
+    background: rgba(14,17,20,.6); border-radius: 3px; display: flex; align-items: center; justify-content: center; }
+  .vista-frontal .candado svg { width: 8px; height: 8px; fill: none; stroke: #F2B544; stroke-width: 2; }
+  #disenador.ver-candados .vista-frontal .candado, #disenador:has(#di-bloqueados[open]) .vista-frontal .candado { opacity: .8; pointer-events: auto; cursor: pointer; }
+  @media (hover: hover) { #di-vista:hover .candado { opacity: .5; pointer-events: auto; cursor: pointer; } }
+  #di-ver-candados[aria-pressed="true"] { border-color: var(--sol); color: var(--sol); }
+  /* Recién puesta o buscada: brilla un momento para no perderla. */
+  .vista-frontal .brilla { animation: brilla .45s ease-in-out 4; }
+  @keyframes brilla { 50% { opacity: .2; } }
+  /* Agregar donde tocas */
+  .poner { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #2A2416; border: 1px solid var(--sol); border-radius: 12px; padding: 8px 12px; font-size: 14px; color: #F1E3C0; }
+  #disenador.poniendo #di-vista, #disenador.poniendo #di-arriba { cursor: crosshair; }
+  .zoom-barra button:disabled { opacity: .4; }
+  .nombre-bloq { flex: 1; text-align: left; background: none; border: 0; color: inherit; font: inherit; padding: 6px 0; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
   /* Mantener el dedo sobre una planta no abre el menú de copiar/descargar imagen. */
   .vista-frontal img, .vista-superior { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   .forma { display: inline-flex; align-items: center; gap: 6px; }
@@ -217,7 +229,8 @@
     .di-der { position: fixed; z-index: 60; top: calc(8px + env(safe-area-inset-top)); bottom: calc(8px + env(safe-area-inset-bottom)); right: calc(8px + env(safe-area-inset-right));
       width: min(300px, 42vw); max-height: none; box-sizing: border-box; padding: 10px; background: rgba(14,17,20,.84); backdrop-filter: blur(8px);
       border: 1px solid var(--linea); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.45); }
-    #disenador[data-herr="oculto"] .di-der { display: none; }
+    #disenador[data-herr="oculto"] .di-der, #disenador.poniendo .di-der { display: none; }
+    #di-poner { position: fixed; z-index: 85; top: calc(8px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right)); max-width: calc(100% - 340px); }
   }
   [hidden] { display: none !important; }
 </style>
@@ -259,12 +272,15 @@
     </div>
     <div class="di-cols">
     <div class="di-izq pila">
+    <div id="di-poner" class="poner" role="status" hidden><span id="di-poner-t"></span><button id="di-poner-cancelar" class="chip" type="button">Cancelar</button></div>
     <div id="di-zoom-caja" class="zoom-caja"><div id="di-vista"></div></div>
     <div class="zoom-barra">
       <button id="di-zoom-menos" class="btn" type="button" aria-label="Alejar">−</button>
       <span id="di-zoom-v" class="sec num">1×</span>
       <button id="di-zoom-mas" class="btn" type="button" aria-label="Acercar">+</button>
       <button id="di-zoom-ajustar" class="btn" type="button">Ajustar</button>
+      <button id="di-deshacer" class="btn" type="button" aria-label="Deshacer" title="Deshacer" disabled>↶</button>
+      <button id="di-rehacer" class="btn" type="button" aria-label="Rehacer" title="Rehacer" disabled>↷</button>
       <span class="sec">Dos dedos: acercar y mover</span>
     </div>
     <span id="di-faltan" class="sec"></span>
@@ -275,6 +291,11 @@
       <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
         <b id="di-sel-nombre" style="color: var(--sol)"></b>
         <button id="di-soltar" class="chip" type="button">Listo</button>
+      </div>
+      <button id="di-cambiar" class="btn" type="button" aria-expanded="false">Cambiar por…</button>
+      <div id="di-cambiar-caja" class="pila" style="gap: 8px" hidden>
+        <label class="campo"><span class="solo-lector">Buscar con qué cambiarla</span><input id="di-cambiar-buscar" type="search" placeholder="Buscar con qué cambiarla"></label>
+        <div id="di-cambiar-lista" class="pila" style="gap: 8px"></div>
       </div>
       <label class="pila" style="gap: 4px"><span class="sec">Tamaño · <span id="di-tamano-v" class="num">100 %</span></span>
         <input id="di-tamano" type="range" min="40" max="200" step="5" value="100" aria-label="Tamaño"></label>
@@ -296,7 +317,6 @@
           <button id="di-separar" class="btn" type="button">Separar (volver a la arena)</button>
         </div>
       </div>
-      <div id="di-tipo-fila" class="pila" style="gap: 4px" hidden><span class="sec">Tipo</span><div id="di-tipos" class="chips envolver"></div></div>
       <div id="di-forma-fila" class="pila" style="gap: 4px" hidden><span class="sec">Forma</span><div id="di-formas" class="chips envolver"></div></div>
       <label class="pila" style="gap: 4px"><span class="sec">Giro · <span id="di-giro-v" class="num">0°</span></span>
         <input id="di-giro" type="range" min="-45" max="45" step="1" value="0" aria-label="Giro"></label>
@@ -331,7 +351,9 @@
     <div id="di-general" class="pila">
     <details id="di-bloqueados" class="plegable tarjeta" style="padding: 10px 14px" hidden>
       <summary><h2 id="di-bloqueados-t">Bloqueados</h2></summary>
-      <div id="di-bloqueados-lista" class="lista" style="padding-top: 6px"></div>
+      <span class="sec" style="display: block; padding-top: 6px">Toca un nombre para ver cuál es en el dibujo.</span>
+      <div id="di-bloqueados-lista" class="lista"></div>
+      <button id="di-ver-candados" class="btn" type="button" aria-pressed="false" style="width: 100%; margin-top: 8px">Mostrar candados: no</button>
       <button id="di-desbloquear-todos" class="btn" type="button" style="width: 100%; margin-top: 8px">Desbloquear todos</button>
     </details>
     <div class="pila" style="gap: 8px">
