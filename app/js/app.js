@@ -2,7 +2,7 @@ import { crearBluetooth } from './ble.js';
 import { iniciarAcuario } from './acuario.js';
 import { CANALES, MANUAL, cmdColor, cmdHorario, guardarHorario, ponerHora, dentroDeHorario, encenderSiempre, pasosApagado, horasCompletas } from './protocolo.js';
 
-export const VERSION = '0.9.7-beta'; // sube el último número en cada publicación; 1.0.0 = lista para la tienda
+export const VERSION = '0.9.8-beta'; // sube el último número en cada publicación; 1.0.0 = lista para la tienda
 const $ = id => document.getElementById(id);
 const COLORES_CSS = ['var(--rojo)', 'var(--verde)', 'var(--azul)', 'var(--uv)'];
 const RAMPAS = [0, 30, 60, 90, 120, 150];
@@ -26,7 +26,10 @@ function cargar() {
 function guardarLocal() { try { localStorage.setItem('luz-acuario', JSON.stringify(estado)); } catch { /* modo privado */ } }
 
 // ---- Avisos ----
-function avisar(texto, error = false) { $('aviso').textContent = texto; $('aviso').className = error ? 'error' : ''; }
+function avisar(texto, error = false) {
+  const a = $('aviso'); a.textContent = texto; a.className = error ? 'error' : '';
+  a.style.animation = 'none'; void a.offsetWidth; a.style.animation = ''; // con el celular acostado en el diseñador flota y se desvanece: reiniciar
+}
 function errorAmigable(e) {
   if (e?.name === 'NotFoundError') return 'No elegiste ninguna lámpara.';
   if (e?.name === 'NetworkError') return 'No pude conectar. Cierra la app Week Aqua (la lámpara acepta una sola conexión) y acércate a la lámpara.';

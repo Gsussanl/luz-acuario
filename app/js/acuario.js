@@ -183,6 +183,10 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   let varios = false;
   const elegido = () => diseno().objetos.find(o => o.id === sel);
   const elegidos = () => diseno().objetos.filter(o => grupo.has(o.id));
+  // Celular acostado (no tablet): el diseñador va a pantalla completa (ver el CSS y pintarAcostado).
+  const acostado = matchMedia('(orientation: landscape) and (max-height: 500px)');
+  const instalada = () => matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || navigator.standalone;
+  let ultimoSel = null;      // para subir el panel flotante al elegir algo nuevo
   let uniendo = false;       // "Unir a roca o tronco": esperando que se toque la roca o tronco
   const elegir = id => { sel = id; grupo = new Set(id ? [id] : []); uniendo = false; };
   const colorVista = () => obtenerColores().some(v => v) ? obtenerColores() : [70, 70, 60, 20];
@@ -207,6 +211,8 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     $('di-sustratos').innerHTML = Object.entries(SUSTRATOS).map(([id, x]) => `<button type="button" class="chip planta" data-sustrato="${id}" aria-pressed="${tipo === id}">${x.nombre}</button>`).join('');
     pintarBarra();
     pintarPaleta();
+    if (acostado.matches && sel && sel !== ultimoSel) $('di-panel').scrollTop = 0; // al elegir algo, sus controles arriba del panel flotante
+    ultimoSel = sel;
 
     // Lista de compras: especies numeradas (como en la vista desde arriba) con cantidades aproximadas.
     const compras = listaCompras(objetos, plantas);
@@ -607,17 +613,17 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   const cajaZoom = $('di-zoom-caja');
   /** Cambia el zoom dejando quieto el punto (px, py) de la pantalla (por defecto, el centro de la caja). */
   function ponerZoom(z, px, py) {
-    const caja = cajaZoom.getBoundingClientRect();
+    const caja = cajaZoom.getBoundingClientRect(), vista = $('di-vista');
     z = Math.round(Math.min(ZOOM_MAX, Math.max(1, z)) * 100) / 100;
     if (z === zoom && z !== 1) return;
     px ??= caja.left + caja.width / 2; py ??= caja.top + caja.height / 2;
-    // Punto del dibujo bajo (px, py), en fracción del ancho y alto a zoom 1.
-    const fx = (cajaZoom.scrollLeft + px - caja.left) / zoom, fy = (cajaZoom.scrollTop + py - caja.top) / zoom;
+    // Punto del dibujo bajo (px, py), en px del dibujo a zoom 1 (el dibujo puede estar centrado en la caja).
+    const antes = vista.getBoundingClientRect(), fx = (px - antes.left) / zoom, fy = (py - antes.top) / zoom;
     if (zoom === 1 && z > 1) cajaZoom.style.height = `${cajaZoom.offsetHeight}px`; // la ventana conserva el alto de 1×
     zoom = z;
-    $('di-vista').style.setProperty('--zoom', z);
+    vista.style.setProperty('--zoom', z);
     if (z === 1) { cajaZoom.style.height = ''; cajaZoom.scrollTo(0, 0); }
-    else { cajaZoom.scrollLeft = fx * z - (px - caja.left); cajaZoom.scrollTop = fy * z - (py - caja.top); }
+    else { const d = vista.getBoundingClientRect(); cajaZoom.scrollLeft += d.left + fx * z - px; cajaZoom.scrollTop += d.top + fy * z - py; }
     $('di-zoom-v').textContent = `${Math.round(z * 10) / 10}×`.replace('.', ',');
     $('di-zoom-menos').disabled = z <= 1; $('di-zoom-mas').disabled = z >= ZOOM_MAX; $('di-zoom-ajustar').disabled = z === 1;
     tactil();
@@ -673,8 +679,42 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     e.preventDefault();
     ponerZoom(zoom * Math.exp(-e.deltaY / 200), e.clientX, e.clientY);
   }, { passive: false });
-  let anchoAntes = innerWidth; // al girar la pantalla (cambia el ancho, no solo la barra del navegador), volver a 1×
-  addEventListener('resize', () => { if (innerWidth !== anchoAntes) { anchoAntes = innerWidth; if (zoom > 1) ponerZoom(1); } });
+  // Al girar la pantalla (cambia el ancho, no solo la barra del navegador): se rehace la caja y se conserva el zoom y lo que se veía al centro.
+  let anchoAntes = innerWidth;
+  addEventListener('resize', () => {
+    if (innerWidth === anchoAntes) return;
+    anchoAntes = innerWidth;
+    if (zoom <= 1 || $('disenador').hidden) return;
+    const z = zoom, v = $('di-vista').getBoundingClientRect(), c = cajaZoom.getBoundingClientRect();
+    const fx = (c.left + c.width / 2 - v.left) / v.width, fy = (c.top + c.height / 2 - v.top) / v.height;
+    ponerZoom(1);
+    requestAnimationFrame(() => {
+      ponerZoom(z);
+      const v2 = $('di-vista').getBoundingClientRect(), c2 = cajaZoom.getBoundingClientRect();
+      cajaZoom.scrollLeft += v2.left + fx * v2.width - (c2.left + c2.width / 2);
+      cajaZoom.scrollTop += v2.top + fy * v2.height - (c2.top + c2.height / 2);
+    });
+  });
+
+  // ---------- Celular acostado: el dibujo a pantalla completa, herramientas en un panel flotante ----------
+  function pintarAcostado() {
+    const oculto = $('disenador').dataset.herr === 'oculto';
+    $('di-herr').textContent = oculto ? 'Herramientas' : 'Ocultar';
+    $('di-herr').setAttribute('aria-expanded', !oculto);
+    $('di-completa').hidden = !acostado.matches || instalada() || !document.documentElement.requestFullscreen;
+    $('di-completa').textContent = document.fullscreenElement ? 'Salir de pantalla completa' : 'Pantalla completa';
+  }
+  $('di-herr').onclick = () => {
+    $('disenador').dataset.herr = $('disenador').dataset.herr === 'oculto' ? '' : 'oculto';
+    pintarAcostado();
+  };
+  $('di-completa').onclick = () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => avisar('El navegador no dejó usar pantalla completa.'));
+  };
+  acostado.addEventListener('change', pintarAcostado);
+  document.addEventListener('fullscreenchange', pintarAcostado);
+  pintarAcostado();
 
   // Vista desde arriba: tocar elige; con algo elegido, arrastrar lo mueve (de lado y hacia adelante/atrás).
   let arrastreArriba = null;
@@ -874,6 +914,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   };
   $('di-listo').onclick = () => {
     $('disenador').hidden = true; $('nav').hidden = false; elegir(null);
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     pintarAcuario(); mostrarPestana('t-acuario');
   };
   $('di-copiar').onclick = async () => {

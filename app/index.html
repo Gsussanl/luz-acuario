@@ -176,6 +176,31 @@
     .di-izq .zoom-caja { width: min(100%, calc((100dvh - 130px) / var(--prop, .5))); margin: 0 auto; }
     .di-der { max-height: calc(100dvh - 70px); overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
   }
+  /* Celular acostado con el diseñador abierto: el dibujo de orilla a orilla (respetando la muesca), herramientas en un panel
+     flotante plegable, zoom y "Listo" en las esquinas y los avisos flotando encima. No aplica en tablet (es más alta). */
+  .solo-acostado { display: none; }
+  @keyframes aviso-fuera { to { opacity: 0; visibility: hidden; } }
+  @media (orientation: landscape) and (max-height: 500px) {
+    main:has(> #disenador:not([hidden])) { padding: 0; }
+    main:has(> #disenador:not([hidden])) > :is(header, #version) { display: none; }
+    main:has(> #disenador:not([hidden])) > #aviso { position: fixed; z-index: 80; top: calc(58px + env(safe-area-inset-top)); /* bajo los botones, centrado en lo que deja el panel */ left: calc((100% - min(300px, 42vw)) / 2); translate: -50% 0;
+      width: max-content; max-width: min(calc(100vw - min(300px, 42vw) - 32px), 440px); font-size: 13px; padding: 8px 12px; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,.5);
+      animation: aviso-fuera .4s 5s forwards; }
+    #disenador .solo-acostado { display: inline-flex; align-items: center; }
+    #di-ayuda, #di-faltan, .zoom-barra .sec:last-child, .di-titulo > div:first-child { display: none; }
+    .di-titulo { position: fixed; z-index: 70; top: calc(8px + env(safe-area-inset-top)); left: calc(8px + env(safe-area-inset-left)); justify-content: flex-start !important; gap: 6px !important; }
+    .di-titulo .btn:not(.prim), .zoom-barra .btn { background: rgba(20,24,28,.78); backdrop-filter: blur(6px); }
+    .di-izq { position: fixed; inset: 0; z-index: 50; background: var(--bg); }
+    .di-izq .zoom-caja { width: 100%; height: 100%; margin: 0; border-radius: 0; display: flex; box-sizing: border-box;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+    #di-vista { width: calc(min(100%, (100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px) / var(--prop, .5)) /* 20px: la lámpara */ * var(--zoom, 1)); margin: auto; flex: none; }
+    .zoom-barra { position: fixed; z-index: 70; margin: 0; left: calc(8px + env(safe-area-inset-left)); bottom: calc(8px + env(safe-area-inset-bottom)); gap: 6px; }
+    .zoom-barra #di-zoom-v { background: rgba(20,24,28,.78); border-radius: 8px; padding: 2px 6px; }
+    .di-der { position: fixed; z-index: 60; top: calc(8px + env(safe-area-inset-top)); bottom: calc(8px + env(safe-area-inset-bottom)); right: calc(8px + env(safe-area-inset-right));
+      width: min(300px, 42vw); max-height: none; box-sizing: border-box; padding: 10px; background: rgba(14,17,20,.84); backdrop-filter: blur(8px);
+      border: 1px solid var(--linea); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.45); }
+    #disenador[data-herr="oculto"] .di-der { display: none; }
+  }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -208,9 +233,11 @@
 
   <!-- DISEÑADOR -->
   <section id="disenador" class="pila" hidden aria-label="Diseñar acuario">
-    <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px">
+    <div class="di-titulo" style="display: flex; justify-content: space-between; align-items: center; gap: 10px">
       <div><h2 style="font-size: 22px">Diseñar acuario</h2><div class="sec num" id="di-medidas"></div></div>
       <button id="di-listo" class="btn prim" type="button" style="flex: 0 0 auto">Listo</button>
+      <button id="di-herr" class="btn solo-acostado" type="button" aria-controls="di-panel">Ocultar</button>
+      <button id="di-completa" class="btn solo-acostado" type="button" hidden>Pantalla completa</button>
     </div>
     <div class="di-cols">
     <div class="di-izq pila">
@@ -224,7 +251,7 @@
     </div>
     <span id="di-faltan" class="sec"></span>
     </div>
-    <div class="di-der pila">
+    <div id="di-panel" class="di-der pila">
     <p id="di-ayuda" class="sec" style="margin: 0">Toca una planta, roca o tronco para elegirlo; luego arrástralo. Si hay algo encima, toca otra vez para elegir lo de atrás. Hacia abajo = más al frente; todo queda apoyado en la arena. Para poner una planta sobre una roca o tronco: elígela, toca "Unir a roca o tronco" y luego toca el punto exacto (o suéltala encima).</p>
     <div id="di-sel" class="tarjeta pila" style="gap: 10px; padding: 12px 14px" hidden>
       <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
