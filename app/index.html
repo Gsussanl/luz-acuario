@@ -118,6 +118,11 @@
   .vista-frontal img.alf { object-fit: fill; -webkit-mask-image: var(--m), linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
     mask-image: var(--m), linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
     -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-composite: source-in; mask-composite: intersect; }
+  /* Musgo unido: recortado con la silueta de su roca o tronco (--mi, en el marco de la pieza) y con bordes difuminados. */
+  .vista-frontal img.musgo { object-fit: fill;
+    -webkit-mask-image: var(--mi), radial-gradient(closest-side, #000 55%, transparent); mask-image: var(--mi), radial-gradient(closest-side, #000 55%, transparent);
+    -webkit-mask-size: var(--ms), 100% 100%; mask-size: var(--ms), 100% 100%; -webkit-mask-position: var(--mp), 0 0; mask-position: var(--mp), 0 0;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-composite: source-in; mask-composite: intersect; }
   .vista-frontal .sombra { position: absolute; pointer-events: none; border-radius: 50%; background: radial-gradient(closest-side, rgba(0,0,0,.55), rgba(0,0,0,0)); }
   .vista-frontal .luz { position: absolute; inset: 0; mix-blend-mode: soft-light; z-index: 3000; pointer-events: none; }
   /* Acuario completo: lámpara arriba, aire bajo el vidrio y el agua. */

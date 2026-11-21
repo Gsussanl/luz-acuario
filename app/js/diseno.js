@@ -5,7 +5,8 @@
 //   x = centro horizontal (% del largo).
 //   b = profundidad, como la altura del piso del acuario en la vista: ARENA[0] = vidrio de atrás, ARENA[1] = vidrio del frente.
 //   Todo se apoya en la arena: en pantalla su base queda a la altura real del sustrato en ese punto (alturaSustrato).
-//   sobre = { id, x, y, z }: planta unida a una roca o tronco (x: −50 a 50 % de su ancho; y: 0 base a 100 punta; z: −1 detrás, 0 encima, 1 delante).
+//   sobre = { id, x, y, z }: planta unida a una roca o tronco (x: −50 a 50 % de su ancho; y: 0 base a 100 = su superficie en ese punto;
+//   z: −1 detrás, 0 encima, 1 delante).
 // Versión 2 (b de 78 a 95 y "encima" si b < 78) se convierte con aV3. El modelo por celdas se migra con celdasAObjetos.
 
 export const PLANOS = ['fondo', 'medio', 'frente'];
@@ -44,6 +45,8 @@ const escapar = s => String(s).replace(/[&<>"']/g, ch => `&#${ch.charCodeAt(0)};
 export const esAlfombra = p => p.zona === 'primer' || p.zona === 'flotante';
 /** Alfombra real (Cuba, Monte Carlo…): se dibuja como tapiz. Las de primer plano con forma "mata" (Staurogyne…) se dibujan como matas. */
 export const esTapiz = p => p.forma ? p.forma === 'tapiz' : p.zona === 'primer';
+/** Musgo: unido a una roca o tronco se dibuja recortado con la silueta de la pieza (cojines bajos que siguen su contorno). */
+export const esMusgo = p => p?.forma === 'musgo';
 /** Plano según la profundidad: sirve para avisos, autocompletar y el ancho de las copias. */
 export const planoDe = b => { const d = profundidad(b); return d < 0.265 ? 'fondo' : d < 0.59 ? 'medio' : 'frente'; };
 /** Perspectiva: lo de adelante se ve un poco más chico (1 al fondo, 0.85 al frente). */
@@ -301,9 +304,9 @@ export const OLAS = [0, 1, 2].map(k => {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 });
 
-function imagen(ruta, nombre, color, estilo, id, ola) {
+function imagen(ruta, nombre, color, estilo, id, ola, extra = '') {
   // Si falta el PNG se muestra un marcador con el nombre: así se sabe qué imagen falta.
-  const alf = ola === undefined ? '' : ` class="alf" data-ola="${ola}"`;
+  const alf = ola === undefined ? extra : ` class="alf" data-ola="${ola}"`;
   return `<img src="${ruta}" alt="" loading="lazy" draggable="false"${alf} style="${estilo}" data-o="${id}" data-nombre="${escapar(nombre)}" data-color="${color}"
     onerror="const d=document.createElement('div');d.className='falta-img';d.textContent=this.dataset.nombre;d.setAttribute('style',this.getAttribute('style')+';--c:'+this.dataset.color);d.dataset.o=this.dataset.o;this.replaceWith(d)">`;
 }
@@ -482,25 +485,83 @@ export function apoyo(o, ctx) {
   const { largo = 100, alto = 45, sustrato, objetos = [] } = ctx;
   const r = soporteDe(o, objetos);
   if (!r) return { x: o.x, y: yArena(sustrato, o.x, o.b, alto), esc: perspectiva(o.b), z: capa(o.b), unido: false };
-  const pa = PAISAJE.find(z => z.id === r.paisaje), base = apoyo(r, ctx), e = r.escala || 1;
-  const wCm = 20 * pa.ancho * e, hCm = Math.min(80, pa.alto / alto * 100 * base.esc * e) / 100 * alto;
-  let lx = o.sobre.x / 100 * wCm; const ly = -o.sobre.y / 100 * hCm;
-  if (r.espejo) lx = -lx;
-  const a = (r.rot || 0) * Math.PI / 180;
-  const dx = lx * Math.cos(a) - ly * Math.sin(a), dy = lx * Math.sin(a) + ly * Math.cos(a);
-  const zRoca = base.z + 1 + (r.orden || 0) * 30;
-  return { x: r.x + dx / largo * 100, y: base.y + dy / alto * 100, esc: base.esc, z: zRoca + ((o.sobre.z || 0) < 0 ? -2 : 2 + Math.max(0, o.sobre.z || 0)), unido: true };
+  const m = marcoPieza(r, ctx), lx = o.sobre.x / 100 * m.wCm;
+  const v = aVista(m, lx, o.sobre.y / 100 * altoSuperficie(m, lx), largo, alto);
+  return { ...v, esc: m.base.esc, z: m.zRoca + ((o.sobre.z || 0) < 0 ? -2 : 2 + Math.max(0, o.sobre.z || 0)), unido: true };
 }
 
-/** Al revés que apoyo: un punto de la vista (x, y en %) en coordenadas de la roca (x: −50 a 50 % del ancho, y: 0 base a 100 punta). */
-export function sobreDesdePunto(r, px, py, ctx) {
-  const { largo = 100, alto = 45 } = ctx;
+/**
+ * Silueta de cada imagen de roca o tronco (ruta → { a: ancho/alto, top: [fracción desde arriba del primer píxel opaco, por columna] }).
+ * La llena la app al cargar las imágenes (ponerSilueta); sin ella, la superficie es el borde de arriba de la caja.
+ */
+const SILUETAS = new Map();
+export const ponerSilueta = (ruta, sil) => SILUETAS.set(ruta, sil);
+/** Silueta desde los píxeles RGBA (alfa > 40 = opaco), en n columnas. Cada columna toma la más alta de sus vecinas (sin huecos). */
+export function siluetaDesdeAlfa(px, w, h, n = 48) {
+  const col = Array.from({ length: n }, (_, i) => {
+    const x0 = Math.floor(i * w / n), x1 = Math.max(x0 + 1, Math.floor((i + 1) * w / n));
+    for (let y = 0; y < h; y++) for (let x = x0; x < x1; x++) if (px[(y * w + x) * 4 + 3] > 40) return y / h;
+    return 1;
+  });
+  return { a: w / h, top: col.map((t, i) => Math.min(t, col[i - 1] ?? 1, col[i + 1] ?? 1)) };
+}
+/** Medidas de una roca o tronco en cm (caja y la imagen dentro, apoyada abajo y centrada) y su silueta. */
+function marcoPieza(r, ctx) {
+  const { alto = 45 } = ctx;
   const pa = PAISAJE.find(z => z.id === r.paisaje), base = apoyo(r, ctx), e = r.escala || 1;
   const wCm = 20 * pa.ancho * e, hCm = Math.min(80, pa.alto / alto * 100 * base.esc * e) / 100 * alto;
-  const dx = (px - base.x) / 100 * largo, dy = (py - base.y) / 100 * alto, a = -(r.rot || 0) * Math.PI / 180;
+  const sil = SILUETAS.get(archivoPaisaje(pa, r.v || 0));
+  const dw = sil ? Math.min(wCm, hCm * sil.a) : wCm, dh = sil ? dw / sil.a : hCm;
+  return { r, pa, base, wCm, hCm, dw, dh, sil, zRoca: base.z + 1 + (r.orden || 0) * 30 };
+}
+/** Altura (cm, desde la base) de la superficie de la pieza en lx (cm desde su centro, sin volteo). */
+function altoSuperficie(m, lx) {
+  if (!m.sil) return m.hCm;
+  const t = m.sil.top, u = limitar(lx / m.dw + 0.5, 0, 1) * (t.length - 1), i = Math.floor(u), f = u - i;
+  return Math.max(0.3, m.dh * (1 - (t[i] * (1 - f) + (t[Math.min(i + 1, t.length - 1)] * f))));
+}
+/** Punto de la pieza (lx a lo largo, ly hacia arriba, en cm, sin volteo) en la vista (%), con su posición, giro y volteo. */
+function aVista(m, lx, ly, largo, alto) {
+  if (m.r.espejo) lx = -lx;
+  const a = (m.r.rot || 0) * Math.PI / 180;
+  const dx = lx * Math.cos(a) + ly * Math.sin(a), dy = lx * Math.sin(a) - ly * Math.cos(a);
+  return { x: m.r.x + dx / largo * 100, y: m.base.y + dy / alto * 100 };
+}
+
+/** Al revés que apoyo: un punto de la vista (x, y en %) en coordenadas de la roca (x: −50 a 50 % del ancho, y: 0 base a 100 su superficie ahí). */
+export function sobreDesdePunto(r, px, py, ctx) {
+  const { largo = 100, alto = 45 } = ctx;
+  const m = marcoPieza(r, ctx);
+  const dx = (px - m.base.x) / 100 * largo, dy = (py - m.base.y) / 100 * alto, a = -(r.rot || 0) * Math.PI / 180;
   let lx = dx * Math.cos(a) - dy * Math.sin(a); const ly = dx * Math.sin(a) + dy * Math.cos(a);
   if (r.espejo) lx = -lx;
-  return { x: lx / wCm * 100, y: -ly / hCm * 100 };
+  return { x: lx / m.wCm * 100, y: -ly / altoSuperficie(m, lx) * 100 };
+}
+
+/**
+ * Musgo unido: cojines anchos y bajos a lo largo de la pieza, cada uno hundido en su superficie y recortado con la silueta
+ * de la roca o tronco (máscara con su imagen, en el marco de la pieza: mismo giro y volteo), con bordes difuminados.
+ * data-mi / data-mk llevan la máscara para "Guardar imagen".
+ */
+function musgoEnPieza(o, p, ctx, filtro, color) {
+  const { largo = 100, alto = 45, objetos = [] } = ctx, m = marcoPieza(soporteDe(o, objetos), ctx), r = azar(o.id + 'musgo');
+  const n = o.copias || 2, e = o.escala || 1, prop = p.proporcion || 0.45;
+  const ruta = archivoPaisaje(m.pa, m.r.v || 0), lx0 = o.sobre.x / 100 * m.wCm;
+  return Array.from({ length: n }, (_, k) => {
+    const wm = 22 * e * (0.85 + r() * 0.3), hm = wm * prop * 0.6;     // más ancho que alto
+    const lx = limitar(lx0 + (k - (n - 1) / 2) * 22 * e * 0.5 + (r() - 0.5) * 3, -m.dw / 2, m.dw / 2);
+    const ly = Math.min(1, o.sobre.y / 100) * altoSuperficie(m, lx) - hm * 0.45;  // hundido: lo de arriba sigue el contorno
+    const v = aVista(m, lx, ly, largo, alto);
+    // Máscara en el marco del cojín: la imagen de la pieza ocupa [−dw/2, dw/2] × [0, dh].
+    const sw = m.dw / wm, sh = m.dh / hm, ox = (-m.dw / 2 - (lx - wm / 2)) / wm, oy = (ly + hm - m.dh) / hm;
+    const pos = (o, s) => Math.abs(1 - s) < 1e-3 ? 0 : o / (1 - s) * 100;   // mask-position en % (alinea o con su caja)
+    const w = wm / largo * 100, h = hm / alto * 100;
+    return imagen(`img/plantas/${p.id}.png`, k ? '' : p.nombre, color,
+      conFiltro(`left:${v.x - w / 2}%;width:${w}%;bottom:${100 - v.y}%;height:${h}%;z-index:${m.zRoca + 2 + Math.max(0, o.sobre.z || 0) + (o.orden || 0) * 30}` +
+      `;--mi:url(${ruta});--ms:${(sw * 100).toFixed(2)}% ${(sh * 100).toFixed(2)}%;--mp:${pos(ox, sw).toFixed(2)}% ${pos(oy, sh).toFixed(2)}%` +
+      giro(m.r.rot, m.r.espejo), filtro), o.id, undefined,
+      ` class="musgo" data-mi="${ruta}" data-mk="${[sw, sh, ox, oy].map(x => x.toFixed(4)).join(' ')}"`);
+  }).join('');
 }
 
 /** HTML de un objeto (una roca, o varias copias de una planta). ctx: { largo, alto, catalogo, sustrato, objetos }. */
@@ -543,6 +604,7 @@ export function dibujarObjeto(o, ctx) {
     })).join('');
   }
   const filtro = filtroColor(o.color, profundidad((soporteDe(o, ctx.objetos || []) || o).b), ctx.profundidad !== false); // unida: la profundidad de su roca
+  if (esMusgo(p) && ap.unido) return musgoEnPieza(o, p, ctx, filtro, color);
   return (plana || ap.unido ? '' : sombra(ap.x, anchoSec * (o.escala || 1) * 1.1, ap.y, z, o.id)) +
     copiasVariadas(p, ap.unido ? 'medio' : planoDe(o.b), o.id, ap.x, anchoSec * (o.escala || 1), o.copias).map(({ dx, w, f, espejo }, n) =>
       imagen(`img/plantas/${p.id}.png`, n ? '' : p.nombre, color,

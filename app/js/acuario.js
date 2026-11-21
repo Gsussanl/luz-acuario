@@ -2,7 +2,7 @@
 // solo le pasa al módulo de luz "usa esta mezcla" o "usa estas horas" cuando el usuario lo pide.
 import { recomendar, horasDeArranque, avisosDeGrupo } from '../../datos/recomendar.js';
 import { PAISAJE, seccionesPara, autocompletar, celdasAObjetos, nuevoId, posicionInicial, numerar, avisosDiseno, vistaFrontal, plantilla, PLANTILLAS, vistaSuperior, listaCompras, esAlfombra, PERFILES, archivoPaisaje, SUSTRATOS, tipoSustrato, sustratoAComprar, granos, TEXTURA_CM, aplicarMatriz, OLAS,
-  aV3, mallaDesde, suavizar, consejosComposicion, gruposAgregar, resumenCompras, historial, sustituir, profundidadDesdeToque, ladoTarjeta, pasoTecla, apoyo, sobreDesdePunto, dibujarObjeto, soporteDe, bDe, profundidad, planoDe, MALLA, ALTO_MIN, ALTO_AVISO, altoMax, sustratoMasAlto } from './diseno.js';
+  aV3, mallaDesde, suavizar, consejosComposicion, gruposAgregar, resumenCompras, historial, sustituir, profundidadDesdeToque, ladoTarjeta, pasoTecla, apoyo, sobreDesdePunto, dibujarObjeto, ponerSilueta, siluetaDesdeAlfa, esMusgo, soporteDe, bDe, profundidad, planoDe, MALLA, ALTO_MIN, ALTO_AVISO, altoMax, sustratoMasAlto } from './diseno.js';
 
 const CLAVE = 'acuario';
 const TIPOS = { co2: 'Plantado con CO₂', 'sin-co2': 'Plantado sin CO₂', peces: 'Solo peces' };
@@ -342,7 +342,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     $('di-copias-fila').hidden = !p;
     $('di-unir-fila').hidden = !p || grupo.size > 1;
     if (p && grupo.size === 1) pintarUnion(o);
-    if (p) { const n = o.copias || (esAlfombra(p) ? 3 : !o.sobre && planoDe(o.b) === 'fondo' ? 4 : 3); $('di-copias').value = n; $('di-copias-v').textContent = n; }
+    if (p) { const n = o.copias || (esMusgo(p) && o.sobre ? 2 : esAlfombra(p) ? 3 : !o.sobre && planoDe(o.b) === 'fondo' ? 4 : 3); $('di-copias').value = n; $('di-copias-v').textContent = n; }
     $('di-giro').value = o.rot || 0;
     $('di-giro-v').textContent = `${o.rot || 0}°`;
     pintarColor(o);
@@ -369,7 +369,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   /** Une la planta elegida a la roca o tronco r, en el punto l (coordenadas de la roca). */
   function unirA(r, l) {
     const o = elegido(); if (!o?.planta) return;
-    o.sobre = { id: r.id, x: Math.round(Math.max(-50, Math.min(50, l.x))), y: Math.round(Math.max(0, Math.min(100, l.y))), z: 0 };
+    o.sobre = { id: r.id, x: Math.round(Math.max(-50, Math.min(50, l.x))), y: pegado(o, l.y), z: 0 };
     uniendo = false; guardar(); pintarDisenador();
     avisar(`${nombreDe(o)} quedó unida a ${nombreDe(r)}. Ajusta el lugar con los controles o arrastrándola sobre ella.`);
   }
@@ -415,12 +415,14 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
   }
   $('di-poner-cancelar').onclick = () => { poniendo = null; pintarPoniendo(); };
   const esEpifita = item => plantas.find(p => p.id === item?.planta)?.zona === 'epifita';
+  /** Altura de la unión: el musgo va pegado a la superficie de la pieza; lo demás donde se tocó. */
+  const pegado = (item, y) => esMusgo(plantas.find(p => p.id === item?.planta)) ? 100 : Math.round(Math.max(0, Math.min(100, y)));
   /** Pone lo elegido a lo largo x (%) y a la profundidad d (0 atrás … 1 frente); una epífita tocada sobre una roca o tronco queda unida ahí. */
   function ponerEn(x, d, roca, punto) {
     const item = poniendo, objetos = diseno().objetos; poniendo = null;
     const o = { id: nuevoId(), ...item, x: Math.round(Math.min(100, Math.max(0, x)) * 10) / 10, b: bDe(d), escala: 1, espejo: false };
     if (item.paisaje) o.v = objetos.filter(z => z.paisaje === item.paisaje).length;
-    if (roca && punto) o.sobre = { id: roca.id, x: Math.round(Math.max(-50, Math.min(50, punto.x))), y: Math.round(Math.max(0, Math.min(100, punto.y))), z: 0 };
+    if (roca && punto) o.sobre = { id: roca.id, x: Math.round(Math.max(-50, Math.min(50, punto.x))), y: pegado(item, punto.y), z: 0 };
     objetos.push(o); elegir(o.id); guardar(); pintarDisenador(); pintarPoniendo(); brillar(o.id);
     avisar(roca && punto ? `${nombreDe(o)} quedó unida a ${nombreDe(roca)}.` : `${nombreDe(o)} quedó donde tocaste y está elegida: arrástrala para afinar.`);
   }
@@ -562,7 +564,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
       const px = r.left + r.width / 2, py = r.top + r.height, dx = x - px, dy = y - py;
       x = px + dx * Math.cos(-rot) - dy * Math.sin(-rot); y = py + dx * Math.sin(-rot) + dy * Math.cos(-rot);
     }
-    const s = Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight), llena = img.classList.contains('alf'); // alfombra: llena su caja
+    const s = Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight), llena = img.classList.contains('alf') || img.classList.contains('musgo'); // alfombra y musgo: llenan su caja
     const w = llena ? r.width : img.naturalWidth * s, h = llena ? r.height : img.naturalHeight * s, izq = r.left + (r.width - w) / 2, arriba = r.top + r.height - h;
     let u = (x - izq) / w; const v = (y - arriba) / h;
     if (u < 0 || u > 1 || v < 0 || v > 1) return false;
@@ -641,7 +643,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     const el = document.elementsFromPoint(px, py).find(z => z.tagName === 'IMG' && z.dataset.o !== id && objs.find(r => r.id === z.dataset.o)?.paisaje && opaco(z, px, py));
     const r = el && objs.find(z => z.id === el.dataset.o); if (!r) return;
     const l = sobreDesdePunto(r, (px - caja.left) / caja.width * 100, (py - caja.top) / caja.height * 100, contexto());
-    o.sobre = { id: r.id, x: Math.round(Math.max(-50, Math.min(50, l.x))), y: Math.round(Math.max(0, Math.min(100, l.y))), z: 0 };
+    o.sobre = { id: r.id, x: Math.round(Math.max(-50, Math.min(50, l.x))), y: pegado(o, l.y), z: 0 };
     avisar(`${p.nombre} quedó unida a ${nombreDe(r)}: se mueve con ella. Arrástrala lejos para separarla.`);
   }
   function elegirConToque(id) {
@@ -1285,6 +1287,16 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
       while (n < 9 && await existe(`img/paisaje/${pa.id}-${n + 1}.png`)) n++;
       if (n !== (pa.variantes || 1)) { pa.variantes = n; cambio = true; }
     }));
+    // Silueta de cada forma: lo unido se apoya en la superficie real de la pieza, no en el borde de su caja.
+    await Promise.all(PAISAJE.flatMap(pa => Array.from({ length: pa.variantes || 1 }, async (_, v) => {
+      const ruta = archivoPaisaje(pa, v), img = new Image(); img.src = ruta;
+      try { await img.decode(); } catch { return; }
+      const k = Math.min(1, 200 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = Object.assign(document.createElement('canvas'), { width: Math.max(1, Math.round(img.naturalWidth * k)), height: Math.max(1, Math.round(img.naturalHeight * k)) });
+      const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, c.width, c.height);
+      ponerSilueta(ruta, siluetaDesdeAlfa(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height));
+      cambio = true;
+    })));
     if (cambio) { pintarAcuario(); if (!$('disenador').hidden) pintarDisenador(); }
   }
   return { registrado: () => !!datos.acuario, abrirRegistro, mostrarBienvenida, dibujar, anotar: texto => { datos.bitacora.unshift({ id: Date.now(), tipo: 'nota', fecha: Date.now(), detalle: texto }); guardar(); pintarBitacora(); } };
@@ -1294,6 +1306,8 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
  * Dibuja la vista frontal (ya armada en el DOM) en un PNG: fondo, arena, sombras e imágenes en su orden de capas,
  * con giro y volteo, y al final la luz de la lámpara. Lo que falta (marcadores) no se dibuja.
  */
+const imagenes = new Map();
+const cargarImagen = src => imagenes.get(src) || imagenes.set(src, new Promise(ok => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = src; })).get(src);
 async function imagenDeVista(vista) {
   const W = vista.clientWidth, H = vista.clientHeight, k = Math.min(8, Math.max(2, 2400 / W)); // ~2400 px de ancho aunque la pantalla sea chica
   const c = Object.assign(document.createElement('canvas'), { width: W * k, height: H * k });
@@ -1334,8 +1348,8 @@ async function imagenDeVista(vista) {
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill(); ctx.restore(); continue;
     }
     if (!el.naturalWidth) continue;
-    const alf = el.classList.contains('alf');
-    const s = Math.min(w / el.naturalWidth, h / el.naturalHeight), dw = alf ? w : el.naturalWidth * s, dh = alf ? h : el.naturalHeight * s;
+    const alf = el.classList.contains('alf'), musgo = el.classList.contains('musgo');
+    const s = Math.min(w / el.naturalWidth, h / el.naturalHeight), dw = alf || musgo ? w : el.naturalWidth * s, dh = alf || musgo ? h : el.naturalHeight * s;
     let fuente = el;
     if (alf) { // alfombra: la misma máscara que en pantalla (borde ondulado arriba, lados suaves)
       fuente = Object.assign(document.createElement('canvas'), { width: Math.max(1, Math.round(dw * k)), height: Math.max(1, Math.round(dh * k)) });
@@ -1346,6 +1360,17 @@ async function imagenDeVista(vista) {
       const lados = m.createLinearGradient(0, 0, mw, 0);
       lados.addColorStop(0, 'rgba(0,0,0,0)'); lados.addColorStop(0.14, '#000'); lados.addColorStop(0.86, '#000'); lados.addColorStop(1, 'rgba(0,0,0,0)');
       m.fillStyle = lados; m.fillRect(0, 0, mw, mh);
+    }
+    if (musgo) { // recortado con la silueta de su roca o tronco y bordes difuminados, como la máscara de pantalla
+      fuente = Object.assign(document.createElement('canvas'), { width: Math.max(1, Math.round(dw * k)), height: Math.max(1, Math.round(dh * k)) });
+      const m = fuente.getContext('2d'), { width: mw, height: mh } = fuente, [sw, sh, ox, oy] = el.dataset.mk.split(' ').map(Number);
+      m.drawImage(el, 0, 0, mw, mh);
+      m.globalCompositeOperation = 'destination-in';
+      const pieza = await cargarImagen(el.dataset.mi);
+      if (pieza) m.drawImage(pieza, ox * mw, oy * mh, sw * mw, sh * mh);
+      m.translate(mw / 2, mh / 2); m.scale(mw / 2, mh / 2);
+      const borde = m.createRadialGradient(0, 0, 0, 0, 0, 1); borde.addColorStop(0.55, '#000'); borde.addColorStop(1, 'rgba(0,0,0,0)');
+      m.fillStyle = borde; m.fillRect(-1, -1, 2, 2);
     }
     ctx.save();
     const filtro = el.style.getPropertyValue('--f').trim(); if (filtro) ctx.filter = filtro; // color de la planta y profundidad
