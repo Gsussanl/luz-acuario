@@ -266,6 +266,8 @@ export function copiasVariadas(planta, plano, semilla, centro, anchoSec, cuantas
   const tapiz = esTapiz(planta), alfombra = tapiz || planta.zona === 'flotante', mata = planta.forma === 'mata';
   const n = cuantas || (alfombra || mata ? 3 : plano === 'fondo' ? 4 : 3); // el usuario puede elegir de 1 a 8
   const copias = Array.from({ length: n }, (_, k) => {
+    if (planta.zona === 'epifita' && !esMusgo(planta)) return { // racimo: encimadas sobre el mismo rizoma, cada hoja con su giro y altura
+      dx: anchoSec * (r() - 0.5) * 0.3, w: anchoSec * (0.75 + r() * 0.2), f: 0.85 + r() * 0.2, espejo: r() < 0.5, rot: Math.round((r() - 0.5) * 24) };
     if (mata) return { // grupito: plantas más angostas, poco separadas, cada una se distingue
       dx: anchoSec * ((k - (n - 1) / 2) * 0.5 + (r() - 0.5) * 0.06), w: anchoSec * (0.55 + r() * 0.15), f: 0.8 + r() * 0.25, espejo: r() < 0.5 };
     const dx = tapiz
@@ -558,8 +560,9 @@ function musgoEnPieza(o, p, ctx, filtro, color) {
     const lx = limitar(lx0 + (k - (n - 1) / 2) * 22 * e * 0.5 + (r() - 0.5) * 3, -m.dw / 2, m.dw / 2);
     const ly = Math.min(1, o.sobre.y / 100) * altoSuperficie(m, lx) - hm * 0.45;  // hundido: lo de arriba sigue el contorno
     const v = aVista(m, lx, ly, largo, alto);
-    // Máscara en el marco del cojín: la imagen de la pieza ocupa [−dw/2, dw/2] × [0, dh].
-    const sw = m.dw / wm, sh = m.dh / hm, ox = (-m.dw / 2 - (lx - wm / 2)) / wm, oy = (ly + hm - m.dh) / hm;
+    // Máscara en el marco del cojín: la imagen de la pieza ocupa [−dw/2, dw/2] × [0, dh], subida un poco (sube) para que el
+    // cojín sobresalga de la superficie con grosor, siguiendo su contorno.
+    const sube = hm * 0.4, sw = m.dw / wm, sh = m.dh / hm, ox = (-m.dw / 2 - (lx - wm / 2)) / wm, oy = (ly + hm - m.dh - sube) / hm;
     const pos = (o, s) => Math.abs(1 - s) < 1e-3 ? 0 : o / (1 - s) * 100;   // mask-position en % (alinea o con su caja)
     const w = wm / largo * 100, h = hm / alto * 100;
     return imagen(`img/plantas/${p.id}.png`, k ? '' : p.nombre, color,
@@ -606,12 +609,14 @@ export function dibujarObjeto(o, ctx) {
     const prop = p.proporcion || 0.2, d0 = profundidad(o.b);
     const copias = copiasVariadas(p, 'frente', o.id, ap.x, anchoSec * (o.escala || 1), o.copias);
     // Cerca del vidrio (la última fila llega hasta él) la alfombra cuelga sobre el corte del sustrato: queda una línea de tierra.
-    const filas = FILAS_ALFOMBRA.map(fd => d0 + fd).filter(d => d <= 1.001);
-    if (filas.at(-1) >= 0.9 && filas.at(-1) < 0.999) filas.push(1);
-    return filas.flatMap((d, i) => copias.map(({ dx, w, f, espejo, ola, dy }, n) => {
+    // Cuelga en dos filas (media y completa): así la parte baja (más oscura) de cada imagen queda tapada y no se ven franjas.
+    const filas = FILAS_ALFOMBRA.map(fd => [d0 + fd, 0]).filter(([d]) => d < 0.999);
+    if (d0 + FILAS_ALFOMBRA.at(-1) >= 0.9) filas.push([1, 0.5], [1, 1]);
+    return filas.flatMap(([d, cuelga], i) => copias.map(({ dx, w, f, espejo, ola, dy }, n) => {
       const b = bDe(Math.min(1, d)), xc = ap.x + (dx + i % 2 * anchoSec * 0.17) * voltear, xa = limitar(xc, 0, 100);
-      const colgar = d >= 0.999 ? alturaSustrato(ctx.sustrato, xa, 1) * (1 - TIERRA_AL_FRENTE) / alto * 100 : 0;
-      const yc = Math.min(100, yArena(ctx.sustrato, xa, b, alto) + dy + colgar), fc = f * (1 - 0.07 * Math.min(i, 2));
+      const colgar = cuelga * alturaSustrato(ctx.sustrato, xa, 1) * (1 - TIERRA_AL_FRENTE) / alto * 100;
+      // Cada copia un poco más arriba o abajo (hasta ~2 %; menos en las del vidrio): los bordes de las filas no forman franjas.
+      const yc = Math.min(100, yArena(ctx.sustrato, xa, b, alto) + dy * (cuelga ? 1 : 4) + colgar), fc = f * (1 - 0.07 * Math.min(i, 2));
       return imagen(`img/plantas/${p.id}.png`, i || n ? '' : p.nombre, color,
         conFiltro(`left:${xc - w / 2}%;width:${w}%;bottom:${100 - yc}%;height:${w * prop * largo / alto * fc}%;z-index:${capa(b, 2) + orden};--m:var(--ola${(ola + i) % OLAS.length})` +
         giro(o.rot, (espejo !== (i % 2 === 1)) !== (voltear < 0)), filtroColor(o.color, profundidad(b), ctx.profundidad !== false)), o.id, (ola + i) % OLAS.length);
@@ -620,10 +625,10 @@ export function dibujarObjeto(o, ctx) {
   const filtro = filtroColor(o.color, profundidad((soporteDe(o, ctx.objetos || []) || o).b), ctx.profundidad !== false); // unida: la profundidad de su roca
   if (esMusgo(p) && ap.unido) return musgoEnPieza(o, p, ctx, filtro, color);
   return (plana || ap.unido ? '' : sombra(ap.x, anchoSec * (o.escala || 1) * 1.1, ap.y, z, o.id)) +
-    copiasVariadas(p, ap.unido ? 'medio' : planoDe(o.b), o.id, ap.x, anchoSec * (o.escala || 1), o.copias).map(({ dx, w, f, espejo }, n) =>
+    copiasVariadas(p, ap.unido ? 'medio' : planoDe(o.b), o.id, ap.x, anchoSec * (o.escala || 1), o.copias).map(({ dx, w, f, espejo, rot = 0 }, n) =>
       imagen(`img/plantas/${p.id}.png`, n ? '' : p.nombre, color,
         conFiltro(`left:${ap.x + dx * voltear - w / 2}%;width:${w}%;bottom:${abajo}%;height:${h * f}%;z-index:${z}` +
-        giro(o.rot, espejo !== (voltear < 0)), filtro), o.id)).join('');
+        giro((o.rot || 0) + rot, espejo !== (voltear < 0)), filtro), o.id)).join('');
 }
 
 /**
@@ -838,21 +843,24 @@ export function plantilla(estilo, plantas, { largo = 100, alto = 45 } = {}, cata
     const der = obj({ paisaje: 'roca-negra', x: 73, b: 90, escala: 1.3, espejo: false, v: 4 }); out.push(der);      // forma 5
     roca('roca-negra', 34, 92, 0.5, 1);
     // Atrás: [x, papel] 0 = naranja, 1 = rojo de la izquierda, 2 = rojo de la derecha (más vivo), -1 = verde entre ellos.
-    const atras = [[5, 0], [14, 0], [24, 0], [33, 1], [42, 1], [51, -1], [60, 2], [70, 2], [80, 2], [91, 2], [98, 2]];
+    const atras = [[5, 0], [14, 0], [24, 0], [33, 1], [42, 1], [51, -1], [60, -1], [69, -1], [80, 2], [91, 2], [98, 2]]; // verde detrás del tronco
     for (const [x, k] of atras) {
       const p = k < 0 ? verdes[0] : rojos[k % rojos.length];
       if (p) out.push(obj({ planta: p.id, x: x + (r() - 0.5) * 3, b: 80 + r() * 1.5, escala: 1.15, copias: 4, ...(k === 2 ? { color: { sat: 145 } } : {}) }));
     }
     // Rotala verde al medio derecho, más oscura.
     if (verdes[0]) [[84, 86, 0.95], [95, 86.5, 0.85]].forEach(([x, b, escala]) => out.push(obj({ planta: verdes[0].id, x, b, escala, color: { brillo: 85 } })));
-    // Dos o tres matas grandes de Alternanthera, no una fila de bolitas.
-    if (arbustos[0]) [[31, 88, 1.45], [46, 88.5, 1.5], [62, 88, 1.4]].forEach(([x, b, escala]) => out.push(obj({ planta: arbustos[0].id, x, b, escala, copias: 2 })));
-    // Sobre el tronco: un helecho grande cerca de la base y otro hacia la punta, cada uno solo; musgo en la base.
-    unida(tronco, helechos[0], -14, { copias: 1, escala: 1.1 });
-    unida(tronco, helechos[1 % helechos.length], 22, { copias: 1, escala: 0.8 });
+    // Tres matas de Alternanthera separadas (cada una se distingue), no una fila de bolitas.
+    if (arbustos[0]) [[33, 88.5, 1.05], [48, 89, 1.1], [62, 90.8, 1]].forEach(([x, b, escala]) => out.push(obj({ planta: arbustos[0].id, x, b, escala, copias: 1 })));
+    // Sobre el tronco: Helecho Narrow en la parte gruesa (no en la punta de la rama partida), el otro helecho hacia la base
+    // y musgo en la base.
+    const narrow = helechos.find(p => p.id === 'helecho-narrow') || helechos[0], otro = helechos.find(p => p !== narrow) || narrow;
+    unida(tronco, narrow, -2, { copias: 2, escala: 0.9 });
+    unida(tronco, otro, -24, { copias: 1, escala: 1.1 });
     unida(tronco, musgos[0], -38, { copias: 2 });
-    unida(izq, musgos[0], -18, { copias: 2 }); unida(izq, anubias[0], 14, { copias: 2 });
-    unida(der, musgos[0], -8, { copias: 1 }); unida(der, bucefalandras[0], 26, { copias: 1 });
+    // Musgo grueso sobre las rocas: cojines más grandes.
+    unida(izq, musgos[0], -18, { copias: 2, escala: 1.15 }); unida(izq, anubias[0], 14, { copias: 2 });
+    unida(der, musgos[0], 0, { copias: 1, escala: 1.1 }); unida(der, bucefalandras[0], 26, { copias: 1 });
     fila(tapiz, 4, 96, 92.5, n + 1);
     fila(tapiz, 8, 92, 90, n, { escala: 0.9 });
     // La alfombra rodea cada roca (detrás y delante de su base) y sube hacia el medio con la pendiente.
