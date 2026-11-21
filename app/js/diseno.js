@@ -331,6 +331,8 @@ const conFiltro = (estilo, f) => f ? `${estilo};--f:${f}` : estilo;
 
 /** Alfombras: profundidades extra (hacia el frente) donde se repiten sus copias para cubrir el piso. */
 const FILAS_ALFOMBRA = [0, 0.06, 0.12];
+/** Pegada al vidrio del frente, la alfombra cubre el corte del sustrato: de su altura ahí solo se ve esta parte (una línea delgada). */
+export const TIERRA_AL_FRENTE = 0.35;
 /** Orden de dibujo: lo de más adelante va delante. A la misma profundidad: plantas detrás, rocas y troncos delante, alfombras delante de la base de la roca. */
 const capa = (b, extra = 0) => Math.max(3, 10 + Math.round(profundidad(b) * 1000) + extra);
 
@@ -595,9 +597,13 @@ export function dibujarObjeto(o, ctx) {
     // en tres filas hacia el frente (hasta ~5 cm más adelante), así no queda una franja de tierra entre alfombras.
     const prop = p.proporcion || 0.2, d0 = profundidad(o.b);
     const copias = copiasVariadas(p, 'frente', o.id, ap.x, anchoSec * (o.escala || 1), o.copias);
-    return FILAS_ALFOMBRA.filter(fd => d0 + fd <= 1.001).flatMap((fd, i) => copias.map(({ dx, w, f, espejo, ola, dy }, n) => {
-      const b = bDe(Math.min(1, d0 + fd)), xc = ap.x + (dx + i % 2 * anchoSec * 0.17) * voltear;
-      const yc = Math.min(100, yArena(ctx.sustrato, limitar(xc, 0, 100), b, alto) + dy), fc = f * (1 - 0.07 * i);
+    // Cerca del vidrio (la última fila llega hasta él) la alfombra cuelga sobre el corte del sustrato: queda una línea de tierra.
+    const filas = FILAS_ALFOMBRA.map(fd => d0 + fd).filter(d => d <= 1.001);
+    if (filas.at(-1) >= 0.9 && filas.at(-1) < 0.999) filas.push(1);
+    return filas.flatMap((d, i) => copias.map(({ dx, w, f, espejo, ola, dy }, n) => {
+      const b = bDe(Math.min(1, d)), xc = ap.x + (dx + i % 2 * anchoSec * 0.17) * voltear, xa = limitar(xc, 0, 100);
+      const colgar = d >= 0.999 ? alturaSustrato(ctx.sustrato, xa, 1) * (1 - TIERRA_AL_FRENTE) / alto * 100 : 0;
+      const yc = Math.min(100, yArena(ctx.sustrato, xa, b, alto) + dy + colgar), fc = f * (1 - 0.07 * Math.min(i, 2));
       return imagen(`img/plantas/${p.id}.png`, i || n ? '' : p.nombre, color,
         conFiltro(`left:${xc - w / 2}%;width:${w}%;bottom:${100 - yc}%;height:${w * prop * largo / alto * fc}%;z-index:${capa(b, 2) + orden};--m:var(--ola${(ola + i) % OLAS.length})` +
         giro(o.rot, (espejo !== (i % 2 === 1)) !== (voltear < 0)), filtroColor(o.color, profundidad(b), ctx.profundidad !== false)), o.id, (ola + i) % OLAS.length);
@@ -841,6 +847,13 @@ export function plantilla(estilo, plantas, { largo = 100, alto = 45 } = {}, cata
     unida(der, musgos[0], -8, { copias: 1 }); unida(der, bucefalandras[0], 26, { copias: 1 });
     fila(tapiz, 4, 96, 92.5, n + 1);
     fila(tapiz, 8, 92, 90, n, { escala: 0.9 });
+    // La alfombra rodea cada roca (detrás y delante de su base) y sube hacia el medio con la pendiente.
+    if (tapiz[0]) for (const o of out.filter(z => z.paisaje?.startsWith('roca'))) {
+      const anchoR = 20 * PAISAJE.find(z => z.id === o.paisaje).ancho * o.escala / largo * 100;
+      for (const k of anchoR > 20 ? [-0.25, 0.25] : [0]) out.push(obj({ planta: tapiz[0].id, x: o.x + anchoR * k, b: o.b - 2, escala: 0.85 }));
+      out.push(obj({ planta: tapiz[0].id, x: o.x + anchoR * 0.3, b: o.b + 1.2, escala: 0.65 }));
+    }
+    fila(tapiz, 12, 88, 87.5, Math.max(2, n - 1), { escala: 0.85 });
   } else { // jungla
     const t1 = obj({ paisaje: 'tronco-spider', x: 28, b: 86, escala: 1.2, rot: 6 }); out.push(t1);
     const t2 = obj({ paisaje: 'tronco-manzanita', x: 72, b: 87, escala: 1.1, rot: -6 }); out.push(t2);
