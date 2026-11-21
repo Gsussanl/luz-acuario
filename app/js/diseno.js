@@ -1,7 +1,8 @@
 // Diseñador del acuario: vista frontal armada con imágenes PNG (app/img/plantas/<id>.png, app/img/paisaje/<id>.png;
 // nombres en PROMPTS-IMAGENES.md). Cada planta, roca o tronco es un objeto con posición libre.
 //
-// Modelo (versión 3): { version: 3, objetos: [{ id, planta | paisaje, x, b, escala, espejo, v, sobre? }], sustrato }
+// Modelo (versión 3): { version: 3, objetos: [{ id, planta | paisaje, x, b, escala, espejo, v, sobre?, enterrar? }], sustrato }
+//   enterrar = 0–60: % del alto de una roca o tronco que queda bajo la arena (no se dibuja; lo unido baja con ella).
 //   x = centro horizontal (% del largo).
 //   b = profundidad, como la altura del piso del acuario en la vista: ARENA[0] = vidrio de atrás, ARENA[1] = vidrio del frente.
 //   Todo se apoya en la arena: en pantalla su base queda a la altura real del sustrato en ese punto (alturaSustrato).
@@ -510,11 +511,14 @@ export function siluetaDesdeAlfa(px, w, h, n = 48) {
 /** Medidas de una roca o tronco en cm (caja y la imagen dentro, apoyada abajo y centrada) y su silueta. */
 function marcoPieza(r, ctx) {
   const { alto = 45 } = ctx;
-  const pa = PAISAJE.find(z => z.id === r.paisaje), base = apoyo(r, ctx), e = r.escala || 1;
-  const wCm = 20 * pa.ancho * e, hCm = Math.min(80, pa.alto / alto * 100 * base.esc * e) / 100 * alto;
+  const pa = PAISAJE.find(z => z.id === r.paisaje), arena = apoyo(r, ctx), e = r.escala || 1;
+  const wCm = 20 * pa.ancho * e, hCm = Math.min(80, pa.alto / alto * 100 * arena.esc * e) / 100 * alto;
   const sil = SILUETAS.get(archivoPaisaje(pa, r.v || 0));
   const dw = sil ? Math.min(wCm, hCm * sil.a) : wCm, dh = sil ? dw / sil.a : hCm;
-  return { r, pa, base, wCm, hCm, dw, dh, sil, zRoca: base.z + 1 + (r.orden || 0) * 30 };
+  // Enterrada: la pieza baja ese % de su alto (el de la imagen, no el de la caja); su base queda bajo la arena.
+  const hundido = dh * limitar(r.enterrar || 0, 0, 60) / 100;
+  const base = hundido ? { ...arena, y: arena.y + hundido / alto * 100 } : arena;
+  return { r, pa, base, wCm, hCm, dw, dh, sil, hundido, zRoca: base.z + 1 + (r.orden || 0) * 30 };
 }
 /** Altura (cm, desde la base) de la superficie de la pieza en lx (cm desde su centro, sin volteo). */
 function altoSuperficie(m, lx) {
@@ -579,11 +583,15 @@ export function dibujarObjeto(o, ctx) {
     const pa = PAISAJE.find(x => x.id === o.paisaje); if (!pa) return '';
     const h = Math.min(80, pa.alto / alto * 100 * esc), w = anchoSec * pa.ancho * (o.escala || 1);
     const z = ap.z + 1 + orden;
+    // Enterrada: la imagen baja y lo que queda bajo la arena se recorta (clip-path; data-ent para "Guardar imagen").
+    const { hundido, hCm } = o.enterrar ? marcoPieza(o, ctx) : { hundido: 0, hCm: 1 }, corte = hundido / hCm;
+    const enterrada = corte ? `;clip-path:inset(0 0 ${(corte * 100).toFixed(2)}% 0)` : '';
     // Sombras: suave sobre lo que está justo detrás (volumen), la de la base y una de contacto más marcada.
     const detras = `<div class="sombra" data-s="${o.id}" style="left:${o.x - w * 0.65}%;width:${w * 1.3}%;bottom:${abajo - 1.5}%;height:${h * 1.1}%;z-index:${z - 1};opacity:.55"></div>`;
     const contacto = `<div class="sombra" data-s="${o.id}" style="left:${o.x - w * 0.36}%;width:${w * 0.72}%;bottom:${abajo - 0.7}%;height:1.8%;z-index:${z - 1};opacity:.85"></div>`;
     return detras + sombra(o.x, w * 0.9, ap.y, z, o.id) + contacto + imagen(archivoPaisaje(pa, o.v || 0), pa.nombre, '#7A6A5A',
-      conFiltro(`left:${o.x - w / 2}%;width:${w}%;bottom:${abajo}%;height:${h}%;z-index:${z}` + giro(o.rot, voltear < 0), filtroColor(o.color, profundidad(o.b), ctx.profundidad !== false)), o.id);
+      conFiltro(`left:${o.x - w / 2}%;width:${w}%;bottom:${abajo - hundido / alto * 100}%;height:${h}%;z-index:${z}` + enterrada + giro(o.rot, voltear < 0), filtroColor(o.color, profundidad(o.b), ctx.profundidad !== false)), o.id,
+      undefined, corte ? ` data-ent="${corte.toFixed(4)}"` : '');
   }
   const p = catalogo.find(x => x.id === o.planta); if (!p) return '';
   // Alfombras: manda el ancho (cubrir sin islitas); la altura sale de la proporción de la imagen.

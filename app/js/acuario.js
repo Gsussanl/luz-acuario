@@ -345,6 +345,9 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     if (p) { const n = o.copias || (esMusgo(p) && o.sobre ? 2 : esAlfombra(p) ? 3 : !o.sobre && planoDe(o.b) === 'fondo' ? 4 : 3); $('di-copias').value = n; $('di-copias-v').textContent = n; }
     $('di-giro').value = o.rot || 0;
     $('di-giro-v').textContent = `${o.rot || 0}°`;
+    $('di-enterrar-fila').hidden = !pa;
+    $('di-enterrar').value = o.enterrar || 0;
+    $('di-enterrar-v').textContent = `${o.enterrar || 0} %`;
     pintarColor(o);
   }
   const cambiar = fn => { const lista = elegidos(); if (!lista.length) return; lista.forEach(fn); guardar(); pintarDisenador(); };
@@ -440,6 +443,13 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     dibujar('di-vista', colorVista(), [...grupo]);
   };
   $('di-giro').onchange = () => { guardar(); pintarDisenador(); };
+  $('di-enterrar').oninput = e => {
+    if (!grupo.size) return;
+    for (const o of elegidos()) if (o.paisaje) { if (+e.target.value) o.enterrar = +e.target.value; else delete o.enterrar; }
+    $('di-enterrar-v').textContent = `${e.target.value} %`;
+    dibujar('di-vista', colorVista(), [...grupo]);
+  };
+  $('di-enterrar').onchange = () => { guardar(); pintarDisenador(); };
   $('di-copias').oninput = e => {
     if (!grupo.size) return;
     for (const o of elegidos()) if (o.planta) o.copias = +e.target.value;
@@ -1377,6 +1387,8 @@ async function imagenDeVista(vista) {
     ctx.translate(x + w / 2, y + h);                                   // base de la imagen
     ctx.rotate((parseFloat(el.style.rotate) || 0) * Math.PI / 180);
     if (el.style.transform.includes('scaleX(-1)')) ctx.scale(-1, 1);
+    const ent = +el.dataset.ent || 0; // enterrada: lo de bajo la arena no se dibuja (como el clip-path de pantalla)
+    if (ent) { ctx.beginPath(); ctx.rect(-w / 2, -h, w, h * (1 - ent)); ctx.clip(); }
     ctx.drawImage(fuente, -dw / 2, -dh, dw, dh);
     ctx.restore();
   }

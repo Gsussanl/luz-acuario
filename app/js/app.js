@@ -2,7 +2,7 @@ import { crearBluetooth } from './ble.js';
 import { iniciarAcuario } from './acuario.js';
 import { CANALES, MANUAL, cmdColor, cmdHorario, guardarHorario, ponerHora, dentroDeHorario, encenderSiempre, pasosApagado, horasCompletas } from './protocolo.js';
 
-export const VERSION = '0.9.23-beta'; // sube el último número en cada publicación; 1.0.0 = lista para la tienda
+export const VERSION = '0.9.24-beta'; // sube el último número en cada publicación; 1.0.0 = lista para la tienda
 const $ = id => document.getElementById(id);
 const COLORES_CSS = ['var(--rojo)', 'var(--verde)', 'var(--azul)', 'var(--uv)'];
 const RAMPAS = [0, 30, 60, 90, 120, 150];
