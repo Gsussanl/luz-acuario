@@ -750,7 +750,7 @@ export const PLANTILLAS = [
   { id: 'nature', nombre: 'Nature', nota: 'Tronco en diagonal, rocas, epífitas y masas de tallo' },
   { id: 'holandes', nombre: 'Holandés', nota: 'Grupos de tallos con contraste de color, sin piedras' },
   { id: 'jungla', nombre: 'Jungla', nota: 'Troncos, epífitas y vegetación densa' },
-  { id: 'natural', nombre: 'Natural con tronco', nota: 'Tronco en diagonal con helechos, tallos rojos y naranjas atrás, arbustos rojos y alfombra en pendiente' },
+  { id: 'natural', nombre: 'Natural con tronco', nota: 'Tronco oscuro en diagonal con helechos, rocas negras planas con musgo, tallos naranjas y rojos atrás, arbustos rojos y alfombra' },
 ];
 
 /**
@@ -804,26 +804,41 @@ export function plantilla(estilo, plantas, { largo = 100, alto = 45 } = {}, cata
     fila(medios, 10, 90, 88, n);
     fila(alfombras, 4, 96, 93, n + 1);
   } else if (estilo === 'natural') {
-    // Como un paisaje natural de referencia: tronco en diagonal de atrás a la izquierda hacia el centro, con helechos;
-    // rocas chicas en su base; tallos rojos y naranjas atrás con verde en medio; arbustos rojos al medio; alfombra al frente.
+    // Guía: un paisaje natural de referencia. Tronco oscuro en diagonal que sube hacia la derecha (base ~45 %, punta ~70 %)
+    // con helechos y musgo en su base; rocas negras planas grandes a los lados (Anubias y Bucephalandra con musgo) y una
+    // chica al centro; atrás Rotala naranja, Ludwigia roja, Rotala Blood Red viva y verde entre ellos; matas grandes de
+    // Alternanthera al medio; Rotala verde oscura al medio derecho; alfombra al frente.
     const papel = (mias, ids) => mias.length ? mias : ids.map(id => catalogo.find(p => p.id === id)).filter(Boolean);
-    const rojos = papel(tallos.filter(p => p.rojo), ['rotala-colorata', 'ludwigia-super-red', 'rotala-blood-red']);
+    const rojos = papel(tallos.filter(p => p.rojo), ['rotala-hra', 'ludwigia-super-red', 'rotala-blood-red']);
     const verdes = papel(tallos.filter(p => !p.rojo && p.tallo), ['rotala-green']);
     const arbustos = papel(medios.filter(p => p.rojo), ['alternanthera']);
-    const helechos = papel(epifitas.filter(p => p.id.startsWith('helecho')).concat(epifitas.filter(p => !p.id.startsWith('helecho'))), ['helecho-narrow', 'helecho-java']);
+    const helechos = papel(epifitas.filter(p => p.id.startsWith('helecho')), ['helecho-java', 'helecho-narrow']);
+    const musgos = papel(epifitas.filter(esMusgo), ['musgo-java']);
+    const chicas = epifitas.filter(p => !p.id.startsWith('helecho') && !esMusgo(p));
+    const anubias = papel(chicas.filter(p => p.id.startsWith('anubia')).concat(chicas.filter(p => !p.id.startsWith('anubia'))), ['anubia-oscura']);
+    const bucefalandras = papel(chicas.filter(p => p.id.startsWith('bucephalandra')).concat(chicas.filter(p => !p.id.startsWith('bucephalandra'))), ['bucephalandra-cafe']);
     const tapiz = papel(alfombras.filter(esTapiz), ['hc-cuba']);
-    const tronco = obj({ paisaje: 'tronco-dragon', x: 37, b: 85, escala: 1.3, espejo: true, rot: 0 }); out.push(tronco); // a un tercio, no al centro
-    roca('roca-negra', 21, 90, 0.7, 0); roca('roca-negra', 31, 91.5, 0.45, 1); roca('roca-negra', 72, 90.5, 0.65, 1);
-    const atras = [[6, 0], [17, 1], [28, 0], [46, -1], [56, -1], [70, 2], [82, 2], [94, 1]]; // [x, cuál rojo] (-1 = verde)
+    const unida = (base, p, x, extra = {}) => p && out.push(obj({ planta: p.id, x: base.x, b: base.b, escala: 1, espejo: false, sobre: { id: base.id, x, y: 100, z: 0 }, ...extra }));
+    const tronco = obj({ paisaje: 'tronco-oscuro', x: 63, b: 84, escala: 1.4, espejo: false, rot: -15, v: 0 }); out.push(tronco);
+    const izq = obj({ paisaje: 'roca-negra', x: 15, b: 90.5, escala: 1.55, espejo: false, v: 3 }); out.push(izq);    // forma 4
+    const der = obj({ paisaje: 'roca-negra', x: 73, b: 90, escala: 1.3, espejo: false, v: 4 }); out.push(der);      // forma 5
+    roca('roca-negra', 34, 92, 0.5, 1);
+    // Atrás: [x, papel] 0 = naranja, 1 = rojo de la izquierda, 2 = rojo de la derecha (más vivo), -1 = verde entre ellos.
+    const atras = [[5, 0], [14, 0], [24, 0], [33, 1], [42, 1], [51, -1], [60, 2], [70, 2], [80, 2], [91, 2], [98, 2]];
     for (const [x, k] of atras) {
       const p = k < 0 ? verdes[0] : rojos[k % rojos.length];
-      if (p) out.push(obj({ planta: p.id, x: x + (r() - 0.5) * 3, b: 80 + r() * 1.5, escala: 1.15, copias: 4 }));
+      if (p) out.push(obj({ planta: p.id, x: x + (r() - 0.5) * 3, b: 80 + r() * 1.5, escala: 1.15, copias: 4, ...(k === 2 ? { color: { sat: 145 } } : {}) }));
     }
-    if (verdes[0]) [[78, 84.5], [88, 85]].forEach(([x, b]) => out.push(obj({ planta: verdes[0].id, x, b, escala: 0.85 })));
-    // Matas rojas separadas (con verde y roca entre ellas), no una pared.
-    if (arbustos[0]) [[14, 87.5, 0.95], [44, 88.5, 0.8], [62, 88, 0.95]].forEach(([x, b, escala]) => out.push(obj({ planta: arbustos[0].id, x, b, escala, copias: 3 })));
-    helechos.slice(0, 2).forEach((p, i) => sobre(tronco, p, i ? 10 : -12));
-    if (helechos[0]) sobre(tronco, helechos[0], -2);
+    // Rotala verde al medio derecho, más oscura.
+    if (verdes[0]) [[84, 86, 0.95], [95, 86.5, 0.85]].forEach(([x, b, escala]) => out.push(obj({ planta: verdes[0].id, x, b, escala, color: { brillo: 85 } })));
+    // Dos o tres matas grandes de Alternanthera, no una fila de bolitas.
+    if (arbustos[0]) [[31, 88, 1.45], [46, 88.5, 1.5], [62, 88, 1.4]].forEach(([x, b, escala]) => out.push(obj({ planta: arbustos[0].id, x, b, escala, copias: 2 })));
+    // Sobre el tronco: un helecho grande cerca de la base y otro hacia la punta, cada uno solo; musgo en la base.
+    unida(tronco, helechos[0], -14, { copias: 1, escala: 1.1 });
+    unida(tronco, helechos[1 % helechos.length], 22, { copias: 1, escala: 0.8 });
+    unida(tronco, musgos[0], -38, { copias: 2 });
+    unida(izq, musgos[0], -18, { copias: 2 }); unida(izq, anubias[0], 14, { copias: 2 });
+    unida(der, musgos[0], -8, { copias: 1 }); unida(der, bucefalandras[0], 26, { copias: 1 });
     fila(tapiz, 4, 96, 92.5, n + 1);
     fila(tapiz, 8, 92, 90, n, { escala: 0.9 });
   } else { // jungla
@@ -834,7 +849,9 @@ export function plantilla(estilo, plantas, { largo = 100, alto = 45 } = {}, cata
     epifitas.forEach((p, i) => sobre(i % 2 ? t2 : t1, p));
     fila(alfombras, 6, 94, 93, n - 1, { escala: 0.8 });
   }
-  return aV3(out, { largo, alto }); // armado en unidades de la versión 2 (las mismas posiciones de siempre)
+  // Armado en unidades de la versión 2 (las mismas posiciones de siempre); lo unido toma la profundidad de su pieza.
+  const v3 = aV3(out, { largo, alto });
+  return v3.map(o => o.sobre ? { ...o, b: v3.find(z => z.id === o.sobre.id)?.b ?? o.b } : o);
 }
 
 // ---------- Etapa 3: vista desde arriba y lista de compras ----------
