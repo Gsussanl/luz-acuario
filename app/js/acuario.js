@@ -443,6 +443,11 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     dibujar('di-vista', colorVista(), [...grupo]);
   };
   $('di-giro').onchange = () => { guardar(); pintarDisenador(); };
+  // ±1° para el ajuste fino (el control de 360° es muy sensible en el celular).
+  for (const b of document.querySelectorAll('[data-giro]')) b.onclick = () => {
+    const g = $('di-giro'); g.value = +g.value + +b.dataset.giro; // el control lo deja entre −180 y 180
+    g.oninput({ target: g }); g.onchange();
+  };
   $('di-enterrar').oninput = e => {
     if (!grupo.size) return;
     for (const o of elegidos()) if (o.paisaje) { if (+e.target.value) o.enterrar = +e.target.value; else delete o.enterrar; }
