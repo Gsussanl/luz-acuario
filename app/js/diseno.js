@@ -828,28 +828,68 @@ export function plantilla(estilo, plantas, { largo = 100, alto = 45 } = {}, cata
     }
   };
   const roca = (id, x, b, escala, v = 0, rot = 0) => out.push(obj({ paisaje: id, x, b, escala, v, rot }));
-  const sobre = (base, p, dx = 0) => { // epífita montada a media altura del elemento
-    const pa = PAISAJE.find(z => z.id === base.paisaje);
-    const h = pa.alto / alto * 100 * perspectivaV2(base.b) * base.escala;
-    out.push(obj({ planta: p.id, x: base.x + dx, b: base.b - h * 0.55, escala: 0.8 }));
-  };
   const n = Math.max(3, Math.round(largo / 20));
+  const unida = (base, p, x, extra = {}) => p && out.push(obj({ planta: p.id, x: base.x, b: base.b, escala: 1, espejo: false, sobre: { id: base.id, x, y: 100, z: 0 }, ...extra }));
+  // Alfombra continua: dos filas al frente, alrededor de cada roca (detrás y delante) y subiendo hacia el medio.
+  const cubrir = tapiz => {
+    fila(tapiz, 4, 96, 92.5, n + 1);
+    fila(tapiz, 8, 92, 90, n, { escala: 0.9 });
+    if (tapiz[0]) for (const o of out.filter(z => z.paisaje?.startsWith('roca'))) {
+      const anchoR = 20 * PAISAJE.find(z => z.id === o.paisaje).ancho * o.escala / largo * 100;
+      for (const k of anchoR > 20 ? [-0.25, 0.25] : [0]) out.push(obj({ planta: tapiz[0].id, x: o.x + anchoR * k, b: o.b - 2, escala: 0.85 }));
+      out.push(obj({ planta: tapiz[0].id, x: o.x + anchoR * 0.3, b: o.b + 1.2, escala: 0.65 }));
+    }
+    fila(tapiz, 12, 88, 87.5, Math.max(2, n - 1), { escala: 0.85 });
+  };
+  // Tallos de atrás en grupos (no planta por planta): cada especie ocupa un tramo, vecinos de distinto color, y las
+  // alturas forman un monte con la cima en "cumbre" (% del largo) en lugar de una pared pareja.
+  const fondoEnGrupos = (lista, cumbre, desde = 3, hasta = 97) => {
+    if (!lista.length) return;
+    const g = Math.min(6, lista.length + 1), paso = (hasta - desde) / g;
+    for (let i = 0; i < g; i++) {
+      const p = lista[i % lista.length], centro = desde + paso * (i + 0.5);
+      const monte = 0.8 + 0.45 * Math.exp(-(((centro - cumbre) / 26) ** 2));
+      for (const d of [-0.22, 0.22]) out.push(obj({ planta: p.id, x: centro + d * paso + (r() - 0.5) * 3, b: 79.5 + r() * 2,
+        escala: +(monte * (0.92 + r() * 0.16)).toFixed(2), copias: 3 }));
+    }
+  };
+  // Matas sueltas en puntos [x, b, escala] dispares: la misma especie va de a dos juntas (una grande y una chica).
+  const matas = (lista, puntos) => lista.length && puntos.forEach(([x, b, escala], i) =>
+    out.push(obj({ planta: lista[(i >> 1) % lista.length].id, x: x + (r() - 0.5) * 2, b, escala, copias: 1 + (i % 2 ? 0 : 1) })));
+  // Epífitas repartidas sobre sus piezas (cada una en otro punto, no apiladas) y musgo en la base de cada pieza.
+  const montar = (piezas, lista) => {
+    const hojas = lista.filter(p => !esMusgo(p)), musgo = lista.filter(esMusgo), cuenta = new Map();
+    hojas.forEach((p, i) => {
+      const base = piezas[i % piezas.length], m = cuenta.get(base) || 0; cuenta.set(base, m + 1);
+      unida(base, p, [-6, 22, -26, 8][m % 4], { copias: m ? 1 : 2, escala: 0.9 });
+    });
+    // Musgo en cojín sobre las rocas; sin rocas, uno solo al centro del tronco (en la punta de las ramas se ve como columna).
+    const unicas = [...new Set(piezas)], rocas = unicas.filter(z => z.paisaje.startsWith('roca'));
+    if (musgo.length) (rocas.length ? rocas : unicas).forEach((base, j) => unida(base, musgo[j % musgo.length], rocas.length ? -30 : 0, { copias: rocas.length ? 2 : 1 }));
+  };
+  // Sin plantas de tapiz, las de primer plano en matas (Staurogyne, pelo de ángel) cubren el frente; si hay tapiz, acentúan.
+  const tapices = alfombras.filter(esTapiz), bajas = plantas.filter(p => p.zona === 'primer' && !esTapiz(p));
+  const frente = (puntos) => { if (tapices.length) { cubrir(tapices); matas(bajas, puntos.map(([x, b, e]) => [x, b, e * 1.5])); } // más grandes: asoman sobre el tapiz
+    else matas(bajas, [...puntos, [6, 92.5, 0.8], [14, 92, 0.65], [36, 92.5, 0.75], [48, 92.5, 0.8], [55, 92, 0.6], [66, 92.5, 0.7], [90, 92.5, 0.8], [96, 92, 0.6]]
+      .map(([x, b, e]) => [x, b, e * 1.6])); };
   if (estilo === 'iwagumi') {
     // Piedra principal fuera del centro (regla de tercios) y dos acompañantes más chicas, todas inclinadas igual.
     roca('roca-seiryu', 38, 86, 1.7, 0, -4);
     roca('roca-seiryu', 62, 88, 1.15, 1, -4);
     roca('roca-seiryu', 20, 90, 0.75, 2, -4);
-    fila(tallos.length ? [tallos.find(p => !p.rojo) || tallos[0]] : [], 6, 94, 80, 2, { escala: 0.8 });
-    fila(alfombras, 4, 96, 92, n + 1);
-    fila(alfombras, 10, 90, 89, n, { escala: 0.9 });
+    // Tallos verdes solo como fondo suave a los lados, más bajos que la piedra principal.
+    const verdes = tallos.filter(p => !p.rojo).concat(tallos.filter(p => p.rojo));
+    if (verdes.length) [[5, 80, 0.95], [13, 81, 0.75], [86, 80.5, 0.85], [95, 80, 1]].forEach(([x, b, escala], i) =>
+      out.push(obj({ planta: verdes[(i >> 1) % verdes.length].id, x: x + (r() - 0.5) * 2, b, escala, copias: 3 })));
+    frente([[27, 89, 0.75], [31, 90, 0.55], [52, 89.5, 0.7], [56, 90.5, 0.5], [73, 90.5, 0.7], [77, 91.5, 0.5]]);
   } else if (estilo === 'nature') {
     const tronco = obj({ paisaje: 'tronco-dragon', x: 46, b: 85, escala: 1.25, rot: -8 }); out.push(tronco);
-    roca('roca-negra', 22, 89, 1.1, 0);
-    roca('roca-negra', 74, 90, 0.9, 1);
-    fila(alternados, 5, 95, 80, n + 1);
-    fila(medios, 12, 88, 86, Math.max(2, n - 1));
-    epifitas.forEach((p, i) => sobre(tronco, p, (i - (epifitas.length - 1) / 2) * 8));
-    fila(alfombras, 4, 96, 92, n + 1);
+    const izq = obj({ paisaje: 'roca-negra', x: 22, b: 89, escala: 1.1, v: 0 }); out.push(izq);
+    const der = obj({ paisaje: 'roca-negra', x: 74, b: 90, escala: 0.9, v: 1 }); out.push(der);
+    fondoEnGrupos(alternados, 30);
+    matas(medios, [[10, 87, 1], [15, 88.5, 0.75], [58, 87.5, 1.05], [63, 89, 0.8], [87, 87, 0.95], [92, 88.5, 0.7]]);
+    montar([tronco, izq, tronco, der], epifitas);
+    frente([[33, 90.5, 0.7], [37, 91.5, 0.5], [82, 91, 0.7]]);
   } else if (estilo === 'holandes') {
     // Calles de tallos escalonadas: altas atrás, medianas delante, sin piedras ni troncos.
     fila(alternados, 6, 94, 80, n + 1, { escala: 1.1 });
@@ -871,7 +911,6 @@ export function plantilla(estilo, plantas, { largo = 100, alto = 45 } = {}, cata
     const anubias = papel(chicas.filter(p => p.id.startsWith('anubia')).concat(chicas.filter(p => !p.id.startsWith('anubia'))), ['anubia-oscura']);
     const bucefalandras = papel(chicas.filter(p => p.id.startsWith('bucephalandra')).concat(chicas.filter(p => !p.id.startsWith('bucephalandra'))), ['bucephalandra-cafe']);
     const tapiz = papel(alfombras.filter(esTapiz), ['hc-cuba']);
-    const unida = (base, p, x, extra = {}) => p && out.push(obj({ planta: p.id, x: base.x, b: base.b, escala: 1, espejo: false, sobre: { id: base.id, x, y: 100, z: 0 }, ...extra }));
     const tronco = obj({ paisaje: 'tronco-oscuro', x: 63, b: 84, escala: 1.4, espejo: false, rot: -15, v: 0 }); out.push(tronco);
     const izq = obj({ paisaje: 'roca-negra', x: 15, b: 90.5, escala: 1.55, espejo: false, v: 3 }); out.push(izq);    // forma 4
     const der = obj({ paisaje: 'roca-negra', x: 73, b: 90, escala: 1.3, espejo: false, v: 4 }); out.push(der);      // forma 5
@@ -895,22 +934,15 @@ export function plantilla(estilo, plantas, { largo = 100, alto = 45 } = {}, cata
     // Musgo grueso sobre las rocas: cojines más grandes.
     unida(izq, musgos[0], -18, { copias: 2, escala: 1.15 }); unida(izq, anubias[0], 14, { copias: 2 });
     unida(der, musgos[0], 0, { copias: 1, escala: 1.1 }); unida(der, bucefalandras[0], 26, { copias: 1 });
-    fila(tapiz, 4, 96, 92.5, n + 1);
-    fila(tapiz, 8, 92, 90, n, { escala: 0.9 });
-    // La alfombra rodea cada roca (detrás y delante de su base) y sube hacia el medio con la pendiente.
-    if (tapiz[0]) for (const o of out.filter(z => z.paisaje?.startsWith('roca'))) {
-      const anchoR = 20 * PAISAJE.find(z => z.id === o.paisaje).ancho * o.escala / largo * 100;
-      for (const k of anchoR > 20 ? [-0.25, 0.25] : [0]) out.push(obj({ planta: tapiz[0].id, x: o.x + anchoR * k, b: o.b - 2, escala: 0.85 }));
-      out.push(obj({ planta: tapiz[0].id, x: o.x + anchoR * 0.3, b: o.b + 1.2, escala: 0.65 }));
-    }
-    fila(tapiz, 12, 88, 87.5, Math.max(2, n - 1), { escala: 0.85 });
+    cubrir(tapiz);
   } else { // jungla
     const t1 = obj({ paisaje: 'tronco-spider', x: 28, b: 86, escala: 1.2, rot: 6 }); out.push(t1);
     const t2 = obj({ paisaje: 'tronco-manzanita', x: 72, b: 87, escala: 1.1, rot: -6 }); out.push(t2);
-    fila(alternados, 4, 96, 80, n + 2, { escala: 1.15 });
-    fila(medios, 8, 92, 88, n + 1);
-    epifitas.forEach((p, i) => sobre(i % 2 ? t2 : t1, p));
-    fila(alfombras, 6, 94, 93, n - 1, { escala: 0.8 });
+    fondoEnGrupos(alternados, 66, 2, 98);
+    // Matas tupidas que se pegan a los troncos y dejan un claro al centro, no una cerca pareja.
+    matas(medios, [[9, 87.5, 1.1], [15, 89, 0.8], [39, 88, 1], [44, 89.5, 0.7], [58, 88.5, 1.1], [63, 90, 0.75], [88, 87.5, 1.05], [94, 89, 0.8]]);
+    montar([t1, t2], epifitas);
+    frente([[22, 91, 0.75], [26, 92, 0.55], [78, 91, 0.75], [83, 92, 0.55]]);
   }
   // Armado en unidades de la versión 2 (las mismas posiciones de siempre); lo unido toma la profundidad de su pieza.
   const v3 = aV3(out, { largo, alto });
