@@ -231,8 +231,12 @@ export function matrizLuz(colores) {
   const intensidad = Math.max(...cs);
   const brillo = 0.22 + 0.85 * Math.min(1, intensidad * 1.3);
   const l = luzDe(cs).map((v, k) => v / BLANCO[k]), alto = Math.max(...l) || 1;
+  // El ojo (y la cámara) se acostumbra al color de la lámpara: con luz que trae de todos los colores solo queda un tinte leve.
+  // Si de verdad falta un color (solo azul, sin rojo), no hay a qué acostumbrarse y ese color se apaga.
+  const t = l.map(v => v / alto), falta = Math.min(1, Math.max(0, 1 - Math.min(...t) / 0.35));
+  const adapta = t.map(v => v ** (0.3 + 0.7 * falta));
   const w = Math.min(1, intensidad / 0.15);         // poca luz: se va mezclando con la de noche
-  const g = l.map((v, k) => +(brillo * (w * v / alto + (1 - w) * NOCHE[k])).toFixed(3));
+  const g = adapta.map((v, k) => +(brillo * (w * v + (1 - w) * NOCHE[k])).toFixed(3));
   const uv = +(cs[3] * 0.03).toFixed(3);              // un velo violeta muy leve
   return [g[0], 0, 0, 0, uv, 0, g[1], 0, 0, 0, 0, 0, g[2], 0, uv, 0, 0, 0, 1, 0];
 }
@@ -739,7 +743,7 @@ export function capasLuz(brillo, id) {
     <linearGradient id="${id}-v" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#f0f0f0"/><stop offset="1" stop-color="#b8b8b8"/></linearGradient>
     <radialGradient id="${id}-l" cx=".5" cy="0" r="1"><stop offset=".55" stop-opacity="0"/><stop offset="1" stop-opacity=".38"/></radialGradient></defs>
     <rect width="100" height="100" fill="url(#${id}-v)"/><rect width="100" height="100" fill="url(#${id}-l)"/></svg>`;
-  const rayosSvg = `<svg class="luz-rayos" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="opacity:${(brillo * 0.85).toFixed(2)}"><defs>
+  const rayosSvg = `<svg class="luz-rayos" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="opacity:${(brillo * 0.6).toFixed(2)}"><defs>
     <linearGradient id="${id}-r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF6E6" stop-opacity=".6"/><stop offset=".9" stop-color="#FFF6E6" stop-opacity="0"/></linearGradient>
     <radialGradient id="${id}-t" cx=".5" cy="0" r=".75"><stop offset="0" stop-color="#FFF6E6" stop-opacity=".42"/><stop offset="1" stop-color="#FFF6E6" stop-opacity="0"/></radialGradient>
     <linearGradient id="${id}-cm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".7" stop-color="#fff" stop-opacity="0"/></linearGradient>
