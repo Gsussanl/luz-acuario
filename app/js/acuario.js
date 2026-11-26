@@ -495,7 +495,7 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     const n = grupo.size; if (!n) return;
     for (const o of elegidos()) o.bloqueado = true;
     elegir(null); guardar(); pintarDisenador();
-    avisar(`${n > 1 ? `${n} cosas bloqueadas` : 'Bloqueado'}: ya no se elige al tocarlo. Para desbloquear, abre "Bloqueados".`);
+    avisar(`${n > 1 ? `${n} cosas bloqueadas` : 'Bloqueado'}: ya no se elige al tocarlo. Para soltarlo, usa el candado de abajo.`);
   };
   function pintarBloqueados() {
     const lista = diseno().objetos.filter(o => o.bloqueado);
@@ -503,15 +503,23 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
     $('di-bloqueados-t').textContent = `Bloqueados (${lista.length})`;
     $('di-ver-candados').setAttribute('aria-pressed', verCandados); $('di-ver-candados').textContent = `Mostrar candados: ${verCandados ? 'sí' : 'no'}`;
     $('disenador').classList.toggle('ver-candados', verCandados);
+    if (!lista.length) desbloqueando = false;
+    $('di-candado').hidden = !lista.length; $('di-candado').setAttribute('aria-pressed', desbloqueando);
+    $('disenador').classList.toggle('desbloqueando', desbloqueando);
+    for (const o of lista) for (const el of $('di-vista').querySelectorAll(`[data-o="${o.id}"]`)) el.classList.add('bloq');
     $('di-bloqueados-lista').innerHTML = lista.map(o => `<div><button type="button" class="nombre-bloq" data-brillar="${o.id}">${escapar(nombreDe(o) || '')}</button>
       <button type="button" class="chip" data-desbloquear="${o.id}">Desbloquear</button></div>`).join('');
   }
-  let verCandados = false;
+  let verCandados = false, desbloqueando = false;
+  // Candado de la barra: lo libre se apaga y lo bloqueado brilla; tocar uno lo desbloquea y lo elige.
+  $('di-candado').onclick = () => {
+    desbloqueando = !desbloqueando; pintarBloqueados();
+    if (desbloqueando) avisar('Toca lo que quieres desbloquear. Toca el candado otra vez para salir.');
+  };
   $('di-ver-candados').onclick = () => { verCandados = !verCandados; pintarBloqueados(); };
-  function preguntarDesbloquear(id) {
+  function desbloquear(id) {
     const o = diseno().objetos.find(z => z.id === id); if (!o) return;
-    if (!confirm(`¿Desbloquear ${nombreDe(o)}?`)) return;
-    delete o.bloqueado; elegir(o.id); guardar(); pintarDisenador(); brillar(o.id);
+    desbloqueando = false; delete o.bloqueado; elegir(o.id); guardar(); pintarDisenador(); brillar(o.id);
     avisar(`${nombreDe(o)} desbloqueado y elegido.`);
   }
   $('di-bloqueados-lista').addEventListener('click', e => {
@@ -681,7 +689,13 @@ export async function iniciarAcuario({ $, avisar, alUsarMezcla, alUsarHoras, alC
       return ponerEn(x, profundidadDesdeToque(diseno().sustrato, x, y, datos.acuario.alto), r, r && sobreDesdePunto(r, x, y, contexto()));
     }
     const candado = e.target.closest?.('[data-candado]');
-    if (candado) { e.preventDefault(); return preguntarDesbloquear(candado.dataset.candado); }
+    if (candado) { e.preventDefault(); return desbloquear(candado.dataset.candado); }
+    if (desbloqueando) { // solo lo bloqueado se puede tocar; fuera de eso, sale del modo
+      e.preventDefault();
+      const id = todosBajoElDedo(e.clientX, e.clientY, true).find(k => diseno().objetos.find(z => z.id === k)?.bloqueado);
+      if (id) return desbloquear(id);
+      desbloqueando = false; pintarBloqueados(); return avisar('Ahí no hay nada bloqueado.');
+    }
     if (uniendo) { // tocar la roca o tronco donde va la planta, en el punto exacto
       e.preventDefault();
       const objs = diseno().objetos, esPaisaje = k => objs.find(z => z.id === k)?.paisaje;
@@ -1397,12 +1411,17 @@ async function imagenDeVista(vista) {
     ctx.drawImage(fuente, -dw / 2, -dh, dw, dh);
     ctx.restore();
   }
-  // El resplandor de arriba (como .haz en pantalla) y, al final, la luz de la lámpara: la misma matriz que el filtro de la pantalla.
-  const haz = +(vista.querySelector('.haz')?.style.opacity || 0);
-  if (haz) {
-    ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = haz;
-    g = ctx.createLinearGradient(0, 0, 0, H * 0.75); g.addColorStop(0, 'rgba(255,246,230,.4)'); g.addColorStop(1, 'rgba(255,246,230,0)');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // Cómo cae la luz (las mismas capas SVG de pantalla: sombra que multiplica y rayos que suman) y, al final,
+  // el color de la lámpara: la misma matriz que el filtro de la pantalla.
+  for (const [svg, modo] of [[vista.querySelector('.luz-sombra'), 'multiply'], [vista.querySelector('.luz-rayos'), 'screen']]) {
+    if (!svg) continue;
+    const copia = svg.cloneNode(true); copia.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    copia.setAttribute('width', Math.round(W * k)); copia.setAttribute('height', Math.round(H * k)); copia.removeAttribute('style');
+    const img = await new Promise(ok => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null);
+      i.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(copia)); });
+    if (!img) continue;
+    ctx.globalCompositeOperation = modo; ctx.globalAlpha = +(svg.style.opacity || 1);
+    ctx.drawImage(img, 0, 0, W, H);
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   }
   const final = c, f = ctx;

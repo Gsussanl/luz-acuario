@@ -723,6 +723,36 @@ function lampara(colores) {
   return `<div class="lampara" aria-hidden="true"><div class="barra">${Array.from({ length: 6 }, () => grupo.join('')).join('<b></b>')}</div></div>`;
 }
 
+/**
+ * Cómo cae la luz de la lámpara: fuerte arriba y al centro, más tenue hacia el fondo y los lados, con rayos que bajan abriéndose
+ * y el reflejo ondulado de la superficie. Dos capas SVG: la sombra se multiplica y los rayos se suman (screen).
+ * "Guardar imagen" dibuja estas mismas capas, así sale igual que la pantalla.
+ */
+export function capasLuz(brillo, id) {
+  const r = azar('rayos');
+  const rayos = Array.from({ length: 9 }, (_, i) => {
+    const x = 7 + i * 10.8 + (r() - 0.5) * 6, w = 1.5 + r() * 3.5, abre = 3 + r() * 5, inclina = (x - 50) * 0.14;
+    const f = n => n.toFixed(1);
+    return `<polygon points="${f(x - w / 2)},0 ${f(x + w / 2)},0 ${f(x + w / 2 + abre + inclina)},100 ${f(x - w / 2 - abre + inclina)},100" opacity="${(0.35 + r() * 0.65).toFixed(2)}"/>`;
+  }).join('');
+  const sombra = `<svg class="luz-sombra" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><defs>
+    <linearGradient id="${id}-v" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#f0f0f0"/><stop offset="1" stop-color="#b8b8b8"/></linearGradient>
+    <radialGradient id="${id}-l" cx=".5" cy="0" r="1"><stop offset=".55" stop-opacity="0"/><stop offset="1" stop-opacity=".38"/></radialGradient></defs>
+    <rect width="100" height="100" fill="url(#${id}-v)"/><rect width="100" height="100" fill="url(#${id}-l)"/></svg>`;
+  const rayosSvg = `<svg class="luz-rayos" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="opacity:${(brillo * 0.85).toFixed(2)}"><defs>
+    <linearGradient id="${id}-r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF6E6" stop-opacity=".6"/><stop offset=".9" stop-color="#FFF6E6" stop-opacity="0"/></linearGradient>
+    <radialGradient id="${id}-t" cx=".5" cy="0" r=".75"><stop offset="0" stop-color="#FFF6E6" stop-opacity=".42"/><stop offset="1" stop-color="#FFF6E6" stop-opacity="0"/></radialGradient>
+    <linearGradient id="${id}-cm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".7" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <mask id="${id}-m"><rect width="100" height="100" fill="url(#${id}-cm)"/></mask>
+    <filter id="${id}-b" x="-20%" width="140%"><feGaussianBlur stdDeviation="1.4 0"/></filter>
+    <filter id="${id}-c" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".09 .22" numOctaves="2" seed="4"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 .97  0 0 0 0 .9  0 0 0 -2.6 1.45"/></filter></defs>
+    <rect width="100" height="100" fill="url(#${id}-t)"/>
+    <g fill="url(#${id}-r)" filter="url(#${id}-b)">${rayos}</g>
+    <rect width="100" height="100" filter="url(#${id}-c)" mask="url(#${id}-m)" opacity=".4"/></svg>`;
+  return sombra + rayosSvg;
+}
+
 /** Vista frontal: lámpara, aire bajo el vidrio y el acuario con imágenes por capas, iluminado con los colores de la lámpara. */
 const CANDADO = '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 /** Vista frontal. candados: en el diseñador, lo bloqueado lleva un candado chico en su base (no sale en la imagen guardada). */
@@ -754,7 +784,7 @@ export function vistaFrontal({ acuario, diseno, catalogo, colores, seleccion, ca
     <style>.vista-frontal{${OLAS.map((u, k) => `--ola${k}:url("${u}")`).join(';')}}</style>
     ${capas}
     ${resaltar(seleccion)}
-    <div class="haz" style="opacity:${(brillo * 0.45).toFixed(2)}"></div>
+    ${capasLuz(brillo, idLuz)}
     <div class="barra-luz" style="opacity:${(brillo * 0.9).toFixed(2)}"></div>
     ${objetos.length ? '' : '<div class="vacio">Toca "Editar diseño" para acomodar tus plantas</div>'}
   </div></div>`;

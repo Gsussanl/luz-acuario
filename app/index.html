@@ -137,10 +137,10 @@
   .tanque .aire::before, .tanque .aire::after { content: ''; position: absolute; top: -1px; bottom: 0; width: 3px; background: #15181B; }
   .tanque .aire::before { left: 2.5%; } .tanque .aire::after { right: 2.5%; }
   .vista-frontal .agua { box-shadow: inset 0 2px 0 rgba(200,230,255,.22); } /* superficie del agua */
-  .vista-frontal .haz { position: absolute; inset: 0; z-index: 2999; pointer-events: none; mix-blend-mode: screen;
-    background: repeating-linear-gradient(97deg, transparent 0 4%, color-mix(in srgb, var(--luz, #FFF6E6) 22%, transparent) 4% 6%, transparent 6% 11%),
-      linear-gradient(color-mix(in srgb, var(--luz, #FFF6E6) 40%, transparent), transparent 75%);
-    -webkit-mask-image: linear-gradient(#000, transparent 90%); mask-image: linear-gradient(#000, transparent 90%); }
+  /* La luz que cae: sombra hacia el fondo y los lados (multiplica) y rayos con el reflejo de la superficie (suma). */
+  .vista-frontal .luz-sombra, .vista-frontal .luz-rayos { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .vista-frontal .luz-sombra { z-index: 2998; mix-blend-mode: multiply; }
+  .vista-frontal .luz-rayos { z-index: 2999; mix-blend-mode: screen; }
   .vista-frontal .barra-luz { position: absolute; left: 0; right: 0; top: 0; height: 2.5%; z-index: 3001; pointer-events: none; background: #FFF6E6; }
   .tanque .filtro-luz { position: absolute; width: 0; height: 0; }
   .vista-frontal .vacio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--sec); font-size: 13px; z-index: 3002; pointer-events: none; }
@@ -150,12 +150,17 @@
   .vista-superior [data-o] { cursor: pointer; }
   #di-varios[aria-pressed="true"] { border-color: var(--sol); color: var(--sol); }
   /* Candados: chicos y ocultos; se ven con "Bloqueados" abierto, con "Mostrar candados" o al pasar el mouse. Tocarlos desbloquea. */
-  .vista-frontal .candado { position: absolute; width: 11px; height: 11px; margin-left: -5.5px; z-index: 2990; pointer-events: none; opacity: 0; transition: opacity .2s;
+  .vista-frontal .candado { position: absolute; width: 11px; height: 11px; margin-left: -5.5px; z-index: 3003; pointer-events: none; opacity: 0; transition: opacity .2s;
     background: rgba(14,17,20,.6); border-radius: 3px; display: flex; align-items: center; justify-content: center; }
   .vista-frontal .candado svg { width: 8px; height: 8px; fill: none; stroke: #F2B544; stroke-width: 2; }
   #disenador.ver-candados .vista-frontal .candado, #disenador:has(#di-bloqueados[open]) .vista-frontal .candado { opacity: .8; pointer-events: auto; cursor: pointer; }
   @media (hover: hover) { #di-vista:hover .candado { opacity: .5; pointer-events: auto; cursor: pointer; } }
-  #di-ver-candados[aria-pressed="true"] { border-color: var(--sol); color: var(--sol); }
+  #di-ver-candados[aria-pressed="true"], #di-candado[aria-pressed="true"] { border-color: var(--sol); color: var(--sol); }
+  #di-candado { display: inline-flex; align-items: center; justify-content: center; } #di-candado[hidden] { display: none; }
+  /* Modo desbloquear: lo libre se apaga y lo bloqueado brilla, para tocarlo. */
+  #disenador.desbloqueando #di-vista .vista-frontal [data-o] { filter: var(--f,) brightness(.3) saturate(.35); }
+  #disenador.desbloqueando #di-vista .vista-frontal [data-o].bloq { filter: var(--f,) drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 4px #F2B544); cursor: pointer; }
+  #disenador.desbloqueando #di-vista .vista-frontal .sustrato { filter: brightness(.35); }
   /* Recién puesta o buscada: brilla un momento para no perderla. */
   .vista-frontal .brilla { animation: brilla .45s ease-in-out 4; }
   @keyframes brilla { 50% { opacity: .2; } }
@@ -184,7 +189,7 @@
   @media (pointer: coarse) { .zoom-barra .btn { height: 44px; } }
   .zoom-barra .btn { flex: none; }
   .zoom-barra .sec:last-child { margin-left: auto; font-size: 12px; text-align: right; flex: 1; min-width: 0; }
-  @media (max-width: 420px) { .zoom-barra .sec:last-child { display: none; } } /* no cabe junto a ↶ ↷ */
+  @media (max-width: 420px) { .zoom-barra .sec:last-child { display: none; } .zoom-barra { gap: 5px; } .zoom-barra .btn { min-width: 40px; padding: 0 9px; } } /* no cabe junto a ↶ ↷ y el candado */
   /* Con el dedo: todo lo que se toca mide al menos 44 px. */
   @media (pointer: coarse) {
     .chip { height: 44px; }
@@ -329,6 +334,7 @@
       <button id="di-zoom-ajustar" class="btn" type="button">Ajustar</button>
       <button id="di-deshacer" class="btn" type="button" aria-label="Deshacer" title="Deshacer" disabled>↶</button>
       <button id="di-rehacer" class="btn" type="button" aria-label="Rehacer" title="Rehacer" disabled>↷</button>
+      <button id="di-candado" class="btn" type="button" aria-label="Desbloquear: toca el candado y luego lo que quieres soltar" title="Desbloquear" aria-pressed="false" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
       <button id="di-b-completa" class="btn solo-inm" type="button" aria-label="Pantalla completa" title="Pantalla completa">⤢</button>
       <span class="sec">Dos dedos: acercar y mover</span>
     </div>
